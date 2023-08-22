@@ -1,0 +1,66 @@
+---
+title: "PCA-initial-preview"
+author: "Hector Gavilanes"
+format: html
+editor: visual
+jupyter: python3
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{python}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{python}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+# Importing the dataset
+
+## Libraries
+
+```{python}
+import numpy as np
+import pandas as pd
+pd.set_option('display.max_columns', 150) # displays all columns
+```
+
+## Dataset
+
+```{python}
+# Load the CSV file 
+train_original = pd.read_csv('2023_Hospital_Data_Coverage_Report.csv')
+```
+
+## 02 - Data Prepartion
+
+```{python}
+# Create a working copy of the original DataFrame
+train_data = train_original.copy()
+
+# Print basic dataset info
+train_data.info()
+```
+
+```{python}
+# Drop null records
+train_data = train_data.dropna()
+
+# Drop unecessary features
+#train_data = train_data.drop(['ID'], axis=1)
+
+# Check for null values
+train_data.isnull().sum()
+```

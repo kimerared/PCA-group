@@ -4,7 +4,9 @@ author: "Hector Gavilanes"
 format: html
 editor: visual
 self-contained: true
-
+execute: 
+  warning: false
+  message: false
 ---
 
 ## Libraries
@@ -15,36 +17,63 @@ self-contained: true
 #install.packages("corrplot")
 #install.packages("Metrics")
 #install.packages("caTools")
+#install.packages("EnvStats")
+#install.packages("car")
+#install.packages("corrr")
+#install.packages("ggcorrplot")
+#install.packages("FactoMineR")
+
 ```
 
-```{r}
+```{r setup, echo = TRUE, warnings = FALSE, message = FALSE}}
 # Load necessary libraries
-library(tidyverse)
+library(tidyr)    # for handling missing values
+library(EnvStats) # for rosnerTest
 library(caTools)
 library(caret)
 library(corrplot)
 library(Metrics)
+library(car)      # for outliers test
+library(corrr)    # correlation matrix
+library(ggcorrplot) # correlation graph
+library(FactoMineR) # PCA analysis
+  
 ```
 
 # 01 - Data Preparation
 
 ```{r}
-train_original <- read.csv('DFC_STATE.csv')
+# clear environment
+rm(list = ls())
 
+# Load dataset
+train_original <- read.csv('../dataset/DFC_STATE.csv')
+
+# Make a working copy
 train_data <- train_original
 
-str(train_data)
+tail(train_data)
 ```
 
-Check duplicate records, and missing values.
+## Impute Missing Values
+
+\- Replace missing values with the median.
 
 ```{r}
-# Get column names
-colnames(train_data)
+# Count the number of missing values in each column
+colSums(is.na(train_data))
 
-# Get first few rows of the data
-head(train_data)
+# Remove unnecessary columns
+train_data$State <- NULL
 
+# Loop through all columns and impute missing values with the median
+for (col in colnames(train_data)) {
+  median_value <- median(train_data[[col]], na.rm = TRUE)
+  train_data[[col]] <- ifelse(is.na(train_data[[col]]), median_value, train_data[[col]])
+}
+```
+
+```{r}
 # Remove rows with missing values
 train_data <- na.omit(train_data)
 
@@ -60,28 +89,62 @@ summary(train_data)
 # Summary statistics of categorical variables
 summary(train_data[, sapply(train_data, is.character)])
 ```
-```{r}
-set.seed(95)
-#X <- train_data[, !(names(train_data) %in% c("Survival- As Expected (STATE)", "State"))]
-y <- train_data$Survival..As.Expected..STATE.
 
-#sc <- preProcess(X, method = c("center", "scale"))
-#X_scaled <- predict(sc, X)
+## Standardization
+
+```{r}
+# Scaling Numerical Features
+train_data_sc <- scale(train_data)
+
+head(train_data_sc)
+```
+
+## Outliers
+
+```{r}
+# Create a sample dataset (replace this with your own dataset)
+set.seed(95)
+
+# Plot a boxplot to visualize potential outliers
+boxplot(train_data_sc, main = "Boxplot of Values")
+
+```
+
+```{r}
+# Test for outliers
+outliers <- rosnerTest(train_data_sc,
+  k = 3
+)
+outliers
+```
+
+## Correlations
+
+```{r}
+corr_matrix <- cor(train_data_sc)
+ggcorrplot(corr_matrix)
+```
+
+## Splitting data into Features and Target
+
+```{r}
+is.atomic(train_data_sc)
+
+# Convert vectors to dataframe
+train_data_sc <- as.data.frame(train_data_sc)
+
+# Create y matri
+y <- train_data_sc$Survival..As.Expected..STATE.
 
 # Split the data into training and test sets
 split <- sample.split(y, SplitRatio = 0.7)
-training_set <- train_data[split, ]
-test_set <- train_data[!split, ]
+training_set <- train_data_sc[split, ]
+test_set <- train_data_sc[!split, ]
 
 # Remove unnecessary columns
-cols_to_remove <- c("Survival- As Expected (STATE)", "State")
+cols_to_remove <- c("Survival- As Expected (STATE)")
 training_set <- training_set[, !(names(training_set) %in% cols_to_remove)]
 test_set <- test_set[, !(names(test_set) %in% cols_to_remove)]
-
-# Perform centering and scaling on the training and test sets
-#sc <- preProcess(training_set, method = c("center", "scale"))
-#X_train_scaled <- predict(sc, training_set)
-#X_test_scaled <- predict(sc, test_set)
 
 ```
 
@@ -94,85 +157,92 @@ summary(model)
 
 ```
 
+# 03 - PCA
 
 ```{r}
-X <- train_data[, !(names(train_data) %in% c("Survival- As Expected (STATE)", "State"))]
-y <- train_data$Survival..As.Expected..STATE.
+# Step 2: Apply PCA using prcomp()
+pca_result <- prcomp(training_set, center = TRUE, scale. = TRUE)
 
-sc <- preProcess(X, method = c("center", "scale"))
-X_scaled <- predict(sc, X)
+# Principal components (PCs)
+pcs <- pca_result$x
 
-#set.seed(95)
-#train_index <- createDataPartition(y, p = 0.7, list = FALSE)
-#X_train <- X[train_index, ]
-#X_test <- X[-train_index, ]
-#y_train <- y[train_index]
-#y_test <- y[-train_index]
-```
-```{r}
-set.seed(95)
-split = sample.split(y, SplitRatio = 0.8)
-training_set = subset(train_data, split == TRUE)
-test_set = subset(train_data, split == FALSE)
+# Standard deviations (variances) of the PCs
+std_dev <- pca_result$sdev
 
-training_set <- training_set[, !(names(training_set) %in% c("Survival- As Expected (STATE)", "State"))]
+# Loadings (correlations between original variables and PCs)
+loadings <- pca_result$rotation
+
+# Proportion of variance explained by each PC
+variance_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+
+# Cumulative proportion of variance explained
+cumulative_variance_explained <- cumsum(variance_explained)
 ```
 
+## Components
+
 ```{r}
-# Train a linear regression model
-linear_reg <- lm(y ~ ., data = training_set)
-#y_pred <- predict(linear_reg, newdata = data.frame(X_test))
+print(cumulative_variance_explained)
 ```
 
+```{r}
+# Retain components that explain a percentage (%) of the variance
+num_components <- which(cumulative_variance_explained >= 0.86)[1]
 
+# Step 5: Select the desired number of principal components
+selected_pcs <- pcs[, 1:num_components]
+```
 
 ```{r}
+print(selected_pcs)
+```
 
-# Define features X-matrix
-#X <- train_data[, !(names(train_data) %in% c('Survival- As Expected (STATE)', 'State'))]
+# 04 - Visualization
 
-# Define target y-matrix
-#y <- train_data$`Survival- As Expected (STATE)`
+```{r}
+# Step 1: Extract the eigenvalues
+eigenvalues <- pca_result$sdev^2
 
-# Standardization
-#X_scaled <- scale(X)
+# Calculate the proportion of variance explained by each PC
+variance_proportion <- eigenvalues / sum(eigenvalues)
 
-# Split the data into training and testing sets
-#set.seed(95)
-#index <- createDataPartition(y, p = 0.7, list = FALSE)
+# Step 2: Create a scree plot
+scree_data <- data.frame(PrincipalComponent = 1:length(eigenvalues), Eigenvalue = eigenvalues, VarianceProportion = variance_proportion)
 
-#X_train <- X_scaled[index, ]
-#X_test <- X_scaled[-index, ]
-#y_train <- y[index]
-#y_test <- y[-index]
+scree_plot <- ggplot(data = scree_data, aes(x = PrincipalComponent)) +
+  geom_bar(aes(y = Eigenvalue), stat = "identity", fill = "magenta", width = 0.5) +
+  geom_line(aes(y = Eigenvalue), color = "blue") +
+  geom_text(aes(y = Eigenvalue, label = paste0(round(VarianceProportion * 100, 2), "%")), vjust = -0.5, size = 3) +
+  labs(x = "Principal Component", y = "Eigenvalue", title = "Scree Plot") +
+  theme_minimal()
 
-# Train a linear regression model
-#linear_reg <- lm(y_train ~ ., data = data.frame(y_train, X_train), method = "linearRegression")
-#y_pred <- predict(linear_reg, newdata = data.frame(X_test))
+# Step 3: Display the scree plot
+print(scree_plot)
+```
 
-# Evaluate the model
-mse <- mse(y_test, y_pred)
-rmse <- sqrt(mse)
-r2 <- R2(y_test, y_pred)
+```{r}
+# Step 1: Extract the eigenvalues
+eigenvalues <- pca_result$sdev^2
 
-cat("Mean Squared Error (MSE):", mse, "\n")
-cat("Root Mean Squared Error (RMSE):", rmse, "\n")
-cat("R-squared:", r2, "\n")
+# Step 2: Create a scree plot
+scree_data <- data.frame(PrincipalComponent = 1:length(eigenvalues), Eigenvalue = eigenvalues)
+scree_plot <- ggplot(data = scree_data, aes(x = PrincipalComponent, y = Eigenvalue)) +
+  geom_point(shape = 19, size = 3) +
+  geom_line() +
+  labs(x = "Principal Component", y = "Eigenvalue", title = "Scree Plot")
 
-# Calculate the adjusted R-squared
-n <- length(y)  # Number of observations
-p <- ncol(X)  # Number of predictors (independent variables/features)
-adjusted_r_squared <- 1 - ((1 - r2) * (n - 1)/ (n - p - 1))
+# Step 3: Display the scree plot
+print(scree_plot)
+```
 
-cat("Adjusted R-squared:", adjusted_r_squared, "\n")
+```{r}
+# Plot the data using the first two principal components
+# library(ggplot2)
+ggplot(data = as.data.frame(selected_pcs), aes(x = PC1, y = PC2)) +
+geom_point()
+```
 
-# Extract coefficients and intercept from the model
-coefficients <- coef(linear_reg)
-intercept <- coefficients[1]
-
-cat("Coefficients:", coefficients[-1], "\n")
-cat("Intercept:", intercept, "\n")
-
+```{r}
 # Perform Kernel PCA
 library(kernlab)
 kpca <- kpca(~., data = data.frame(X_train), kernel = "vanilladot", features = 8)
@@ -215,4 +285,3 @@ ggplot(X_train_kpca_plot, aes(x = PC1, y = PC2, color = Target)) +
   scale_color_gradient(low = "blue", high = "red")
 
 ```
-

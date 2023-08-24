@@ -1,0 +1,218 @@
+---
+title: "PCA-example-01"
+author: "Hector Gavilanes"
+format: html
+editor: visual
+self-contained: true
+
+---
+
+## Libraries
+
+```{r}
+# Install libraries if needed
+#install.packages("caret")
+#install.packages("corrplot")
+#install.packages("Metrics")
+#install.packages("caTools")
+```
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(caTools)
+library(caret)
+library(corrplot)
+library(Metrics)
+```
+
+# 01 - Data Preparation
+
+```{r}
+train_original <- read.csv('DFC_STATE.csv')
+
+train_data <- train_original
+
+str(train_data)
+```
+
+Check duplicate records, and missing values.
+
+```{r}
+# Get column names
+colnames(train_data)
+
+# Get first few rows of the data
+head(train_data)
+
+# Remove rows with missing values
+train_data <- na.omit(train_data)
+
+# Count the number of missing values in each column
+colSums(is.na(train_data))
+
+# Get duplicated rows
+train_data[duplicated(train_data), ]
+
+# Summary statistics of the data
+summary(train_data)
+
+# Summary statistics of categorical variables
+summary(train_data[, sapply(train_data, is.character)])
+```
+```{r}
+set.seed(95)
+#X <- train_data[, !(names(train_data) %in% c("Survival- As Expected (STATE)", "State"))]
+y <- train_data$Survival..As.Expected..STATE.
+
+#sc <- preProcess(X, method = c("center", "scale"))
+#X_scaled <- predict(sc, X)
+
+# Split the data into training and test sets
+split <- sample.split(y, SplitRatio = 0.7)
+training_set <- train_data[split, ]
+test_set <- train_data[!split, ]
+
+# Remove unnecessary columns
+cols_to_remove <- c("Survival- As Expected (STATE)", "State")
+training_set <- training_set[, !(names(training_set) %in% cols_to_remove)]
+test_set <- test_set[, !(names(test_set) %in% cols_to_remove)]
+
+# Perform centering and scaling on the training and test sets
+#sc <- preProcess(training_set, method = c("center", "scale"))
+#X_train_scaled <- predict(sc, training_set)
+#X_test_scaled <- predict(sc, test_set)
+
+```
+
+```{r}
+# Fit a multiple regression model
+model <- lm(training_set$Survival..As.Expected..STATE. ~ ., training_set)
+
+# Print a summary of the model
+summary(model)
+
+```
+
+
+```{r}
+X <- train_data[, !(names(train_data) %in% c("Survival- As Expected (STATE)", "State"))]
+y <- train_data$Survival..As.Expected..STATE.
+
+sc <- preProcess(X, method = c("center", "scale"))
+X_scaled <- predict(sc, X)
+
+#set.seed(95)
+#train_index <- createDataPartition(y, p = 0.7, list = FALSE)
+#X_train <- X[train_index, ]
+#X_test <- X[-train_index, ]
+#y_train <- y[train_index]
+#y_test <- y[-train_index]
+```
+```{r}
+set.seed(95)
+split = sample.split(y, SplitRatio = 0.8)
+training_set = subset(train_data, split == TRUE)
+test_set = subset(train_data, split == FALSE)
+
+training_set <- training_set[, !(names(training_set) %in% c("Survival- As Expected (STATE)", "State"))]
+```
+
+```{r}
+# Train a linear regression model
+linear_reg <- lm(y ~ ., data = training_set)
+#y_pred <- predict(linear_reg, newdata = data.frame(X_test))
+```
+
+
+
+```{r}
+
+# Define features X-matrix
+#X <- train_data[, !(names(train_data) %in% c('Survival- As Expected (STATE)', 'State'))]
+
+# Define target y-matrix
+#y <- train_data$`Survival- As Expected (STATE)`
+
+# Standardization
+#X_scaled <- scale(X)
+
+# Split the data into training and testing sets
+#set.seed(95)
+#index <- createDataPartition(y, p = 0.7, list = FALSE)
+
+#X_train <- X_scaled[index, ]
+#X_test <- X_scaled[-index, ]
+#y_train <- y[index]
+#y_test <- y[-index]
+
+# Train a linear regression model
+#linear_reg <- lm(y_train ~ ., data = data.frame(y_train, X_train), method = "linearRegression")
+#y_pred <- predict(linear_reg, newdata = data.frame(X_test))
+
+# Evaluate the model
+mse <- mse(y_test, y_pred)
+rmse <- sqrt(mse)
+r2 <- R2(y_test, y_pred)
+
+cat("Mean Squared Error (MSE):", mse, "\n")
+cat("Root Mean Squared Error (RMSE):", rmse, "\n")
+cat("R-squared:", r2, "\n")
+
+# Calculate the adjusted R-squared
+n <- length(y)  # Number of observations
+p <- ncol(X)  # Number of predictors (independent variables/features)
+adjusted_r_squared <- 1 - ((1 - r2) * (n - 1)/ (n - p - 1))
+
+cat("Adjusted R-squared:", adjusted_r_squared, "\n")
+
+# Extract coefficients and intercept from the model
+coefficients <- coef(linear_reg)
+intercept <- coefficients[1]
+
+cat("Coefficients:", coefficients[-1], "\n")
+cat("Intercept:", intercept, "\n")
+
+# Perform Kernel PCA
+library(kernlab)
+kpca <- kpca(~., data = data.frame(X_train), kernel = "vanilladot", features = 8)
+X_train_kpca <- as.data.frame(predict(kpca, data.frame(X_train)))
+X_test_kpca <- as.data.frame(predict(kpca, data.frame(X_test)))
+
+# Train a linear regression model on the Kernel PCA components
+linear_reg_kpca <- lm(y_train ~ ., data = data.frame(y_train, X_train_kpca))
+y_pred_kpca <- predict(linear_reg_kpca, newdata = data.frame(X_test_kpca))
+
+# Evaluate the Kernel PCA model
+mse_kpca <- mse(y_test, y_pred_kpca)
+r2_kpca <- R2(y_test, y_pred_kpca)
+
+cat("Mean Squared Error (Kernel PCA):", mse_kpca, "\n")
+cat("R-squared (Kernel PCA):", r2_kpca, "\n")
+
+# Calculate the adjusted R-squared for Kernel PCA
+n <- length(y)  # Number of observations
+p <- ncol(X_train_kpca)  # Number of predictors (independent variables/features)
+adjusted_r_squared_kpca <- 1 - ((1 - r2_kpca) * (n - 1)/ (n - p - 1))
+
+cat("Adjusted R-squared (Kernel PCA):", adjusted_r_squared_kpca, "\n")
+
+# Extract coefficients and intercept from the Kernel PCA model
+coefficients_kpca <- coef(linear_reg_kpca)
+intercept_kpca <- coefficients_kpca[1]
+
+cat("Coefficients (Kernel PCA):", coefficients_kpca[-1], "\n")
+cat("Intercept (Kernel PCA):", intercept_kpca, "\n")
+
+# Plot Kernel PCA components
+library(ggplot2)
+X_train_kpca_plot <- data.frame(PC1 = X_train_kpca$PC1, PC2 = X_train_kpca$PC2, Target = y_train)
+ggplot(X_train_kpca_plot, aes(x = PC1, y = PC2, color = Target)) +
+  geom_point() +
+  xlab('First Principal Component (Kernel PCA)') +
+  ylab('Second Principal Component (Kernel PCA)') +
+  ggtitle('Kernel PCA - First Two Principal Components') +
+  scale_color_gradient(low = "blue", high = "red")
+
+```
+

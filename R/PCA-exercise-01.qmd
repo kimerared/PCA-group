@@ -208,9 +208,10 @@ variance_proportion <- eigenvalues / sum(eigenvalues)
 
 # Step 2: Create a scree plot
 scree_data <- data.frame(PrincipalComponent = 1:length(eigenvalues), Eigenvalue = eigenvalues, VarianceProportion = variance_proportion)
+green_scree = '#488959'
 
 scree_plot <- ggplot(data = scree_data, aes(x = PrincipalComponent)) +
-  geom_bar(aes(y = Eigenvalue), stat = "identity", fill = "magenta", width = 0.5) +
+  geom_bar(aes(y = Eigenvalue), stat = "identity", fill = green_scree, width = 0.5) +
   geom_line(aes(y = Eigenvalue), color = "blue") +
   geom_text(aes(y = Eigenvalue, label = paste0(round(VarianceProportion * 100, 2), "%")), vjust = -0.5, size = 3) +
   labs(x = "Principal Component", y = "Eigenvalue", title = "Scree Plot") +

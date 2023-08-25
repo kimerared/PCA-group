@@ -276,32 +276,14 @@ ggsave("scree_plot_20x10_100.png", plot = scree_plot, width = 20, height = 10, u
 
 ```
 
-```{r}
-# Step 1: Extract the eigenvalues
-eigenvalues <- pca_result$sdev^2
-
-# Step 2: Create a scree plot
-scree_data <- data.frame(PrincipalComponent = 1:length(eigenvalues), Eigenvalue = eigenvalues)
-scree_plot <- ggplot(data = scree_data, aes(x = PrincipalComponent, y = Eigenvalue)) +
-  geom_point(shape = 19, size = 3) +
-  geom_line() +
-  labs(x = "Principal Component", y = "Eigenvalue", title = "Scree Plot")
-
-# Step 3: Display the scree plot
-print(scree_plot)
-```
-
-```{r}
-# Plot the data using the first two principal components
-# library(ggplot2)
-ggplot(data = as.data.frame(selected_pcs), aes(x = PC1, y = PC2)) +
-geom_point()
-```
-
 ## Biplot
 
 ```{r}
-fviz_pca_biplot(pca_result)
+fviz_eig(pca_result, addlabels = TRUE)
+```
+
+```{r}
+fviz_pca_biplot(pca_result, geom = "point", addEllipses = FALSE)
 ```
 
 ```{r}
@@ -309,50 +291,47 @@ fviz_pca_biplot(pca_result, label = "var",
                 col.var = "magenta")
 ```
 
+## Component Contribution
+
 ```{r}
 fviz_cos2(pca_result, choice = "var", axes = 1:2)
 ```
 
-```{r}
-# # Perform Kernel PCA
-# library(kernlab)
-# kpca <- kpca(~., data = data.frame(X_train), kernel = "vanilladot", features = 8)
-# X_train_kpca <- as.data.frame(predict(kpca, data.frame(X_train)))
-# X_test_kpca <- as.data.frame(predict(kpca, data.frame(X_test)))
-# 
-# # Train a linear regression model on the Kernel PCA components
-# linear_reg_kpca <- lm(y_train ~ ., data = data.frame(y_train, X_train_kpca))
-# y_pred_kpca <- predict(linear_reg_kpca, newdata = data.frame(X_test_kpca))
-# 
-# # Evaluate the Kernel PCA model
-# mse_kpca <- mse(y_test, y_pred_kpca)
-# r2_kpca <- R2(y_test, y_pred_kpca)
-# 
-# cat("Mean Squared Error (Kernel PCA):", mse_kpca, "\n")
-# cat("R-squared (Kernel PCA):", r2_kpca, "\n")
-# 
-# # Calculate the adjusted R-squared for Kernel PCA
-# n <- length(y)  # Number of observations
-# p <- ncol(X_train_kpca)  # Number of predictors (independent variables/features)
-# adjusted_r_squared_kpca <- 1 - ((1 - r2_kpca) * (n - 1)/ (n - p - 1))
-# 
-# cat("Adjusted R-squared (Kernel PCA):", adjusted_r_squared_kpca, "\n")
-# 
-# # Extract coefficients and intercept from the Kernel PCA model
-# coefficients_kpca <- coef(linear_reg_kpca)
-# intercept_kpca <- coefficients_kpca[1]
-# 
-# cat("Coefficients (Kernel PCA):", coefficients_kpca[-1], "\n")
-# cat("Intercept (Kernel PCA):", intercept_kpca, "\n")
-# 
-# # Plot Kernel PCA components
-# library(ggplot2)
-# X_train_kpca_plot <- data.frame(PC1 = X_train_kpca$PC1, PC2 = X_train_kpca$PC2, Target = y_train)
-# ggplot(X_train_kpca_plot, aes(x = PC1, y = PC2, color = Target)) +
-#   geom_point() +
-#   xlab('First Principal Component (Kernel PCA)') +
-#   ylab('Second Principal Component (Kernel PCA)') +
-#   ggtitle('Kernel PCA - First Two Principal Components') +
-#   scale_color_gradient(low = "blue", high = "red")
+# 06 - Model Building
 
+```{r}
+# Subset the selected PCs (PC1, PC2, PC6, PC7, PC8)
+pca_matrix <- selected_pcs[, c("PC1", "PC2", "PC6", "PC7", "PC8")]
+
+# Check the first few rows of the feature matrix
+head(pca_matrix)
+```
+
+```{r}
+y = training_set$Survival..As.Expected..STATE.
+# Combine 'y' and 'feature_matrix' into a data frame
+data_for_model <- data.frame(y = y, pca_matrix)
+
+# Fit a multiple linear regression model
+model <- lm(y ~ ., data = data_for_model)
+
+# Print a summary of the regression model
+summary(model)
+```
+
+## Final Model - Principal Component Selection
+
+```{r}
+# Removing 'PC8' since it is not significant; p > 0.05
+pca_sig_matrix <- selected_pcs[, c("PC1", "PC2", "PC6", "PC7")]
+
+# y = training_set$Survival..As.Expected..STATE.
+# Combine 'y' and 'feature_matrix' into a data frame
+data_fin <- data.frame(y = y, pca_sig_matrix)
+
+# Fit a multiple linear regression model
+model_fin <- lm(y ~ ., data = data_fin)
+
+# Print a summary of the regression model
+summary(model_fin)
 ```

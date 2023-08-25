@@ -1,0 +1,337 @@
+---
+title: "PCA-example-01"
+author: "Hector Gavilanes"
+format: html
+editor: visual
+self-contained: true
+execute: 
+  warning: false
+  message: false
+---
+
+## Libraries
+
+```{r}
+# Install libraries if needed
+# install.packages("caret")
+# install.packages("corrplot")
+# install.packages("Metrics")
+# install.packages("caTools")
+# install.packages("EnvStats")
+# install.packages("car")
+# install.packages("corrr")
+# install.packages("ggcorrplot")
+# install.packages("FactoMineR")
+#install.packages("factoextra")
+
+```
+
+```{r setup, echo = TRUE, warnings = FALSE, message = FALSE}}
+# Load necessary libraries
+library(tidyr)    # for handling missing values
+library(EnvStats) # for rosnerTest
+library(caTools)
+library(caret)
+library(corrplot)
+library(Metrics)
+library(car)      # for outliers test
+library(corrr)    # correlation matrix
+library(ggcorrplot) # correlation graph
+library(FactoMineR) # PCA analysis
+library(factoextra)  
+```
+
+# 01 - Data Preparation
+
+```{r}
+# clear environment
+rm(list = ls())
+
+# Load dataset
+train_original <- read.csv('../dataset/DFC_STATE.csv')
+
+# Make a working copy
+train_data <- train_original
+
+tail(train_data)
+```
+
+## Impute Missing Values
+
+\- Replace missing values with the median.
+
+```{r}
+# Count the number of missing values in each column
+colSums(is.na(train_data))
+
+# Remove unnecessary columns
+train_data$State <- NULL
+
+# Loop through all columns and impute missing values with the median
+for (col in colnames(train_data)) {
+  median_value <- median(train_data[[col]], na.rm = TRUE)
+  train_data[[col]] <- ifelse(is.na(train_data[[col]]), median_value, train_data[[col]])
+}
+```
+
+```{r}
+# Remove rows with missing values
+train_data <- na.omit(train_data)
+
+# Count the number of missing values in each column
+colSums(is.na(train_data))
+
+# Get duplicated rows
+train_data[duplicated(train_data), ]
+
+# Summary statistics of the data
+summary(train_data)
+
+# Summary statistics of categorical variables
+summary(train_data[, sapply(train_data, is.character)])
+```
+
+# 02 - Standardization
+
+```{r}
+# Scaling Numerical Features
+train_data_sc <- scale(train_data)
+
+head(train_data_sc)
+```
+
+## Outliers
+
+```{r}
+# Create a sample dataset (replace this with your own dataset)
+set.seed(95)
+
+# Plot a boxplot to visualize potential outliers
+boxplot(train_data_sc, main = "Boxplot of Values")
+
+```
+
+```{r}
+# Test for outliers
+outliers <- rosnerTest(train_data_sc,
+  k = 3
+)
+outliers
+```
+
+## Correlations
+
+```{r}
+# Calculate correlations and round to 2 digits
+corr_matrix <- cor(train_data_sc)
+corr_matrix <- round(corr_matrix, digits = 2)
+
+# highly correlated features
+high <- findCorrelation(corr_matrix, cutoff = 0.70)
+
+# Print names of highly correlated features
+names(train_data_sc[, high])
+```
+
+```{r}
+corrplot(corr_matrix, order = 'AOE',
+         tl.pos = 'n',
+         #tl.cex = 0.3,
+         cl.pos = 'n', 
+         col = COL2('PiYG'),
+         type = "lower"
+         )
+
+```
+
+```{r}
+## leave blank on non-significant coefficient
+## add significant correlation coefficients
+corrplot(corr_matrix, method = 'circle', type = 'lower', 
+         insig='blank', #addCoef.col ='black', 
+         order = 'AOE', diag=FALSE,
+         number.cex = 0.3,  # size of coefficient
+         tl.cex = 0.4, # size of text label
+         tl.srt = 3, # degree of text label
+         cl.align.text = 'r',
+         cl.ratio = 0.1,
+         tl.pos = "ld",
+         tl.col = "black"
+)
+```
+
+## Splitting data into Features and Target
+
+```{r}
+is.atomic(train_data_sc)
+
+# Convert vectors to dataframe
+train_data_sc <- as.data.frame(train_data_sc)
+
+# Create y matri
+y <- train_data_sc$Survival..As.Expected..STATE.
+
+# Split the data into training and test sets
+split <- sample.split(y, SplitRatio = 0.7)
+training_set <- train_data_sc[split, ]
+test_set <- train_data_sc[!split, ]
+
+# Remove unnecessary columns
+cols_to_remove <- c("Survival- As Expected (STATE)")
+training_set <- training_set[, !(names(training_set) %in% cols_to_remove)]
+test_set <- test_set[, !(names(test_set) %in% cols_to_remove)]
+
+```
+
+# 03 - Model Training
+
+## Multiple Linear Regression - Full Model
+
+```{r}
+# Fit a multiple regression model
+model <- lm(training_set$Survival..As.Expected..STATE. ~ ., training_set)
+
+# Print a summary of the model
+summary(model)
+
+```
+
+# 04 - Feature Extraction - PCA
+
+```{r}
+# Step 2: Apply PCA using prcomp()
+pca_result <- prcomp(training_set, center = TRUE, scale. = TRUE)
+
+# Principal components (PCs)
+pcs <- pca_result$x
+
+# Standard deviations (variances) of the PCs
+std_dev <- pca_result$sdev
+
+# Loadings (correlations between original variables and PCs)
+loadings <- pca_result$rotation
+
+# Proportion of variance explained by each PC
+variance_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+
+# Cumulative proportion of variance explained
+cumulative_variance_explained <- cumsum(variance_explained)
+
+# Summary of Analysis
+summary(pca_result)
+```
+
+## Components
+
+```{r}
+print(cumulative_variance_explained)
+
+# Elements of PCA objects
+names(pca_result)
+```
+
+```{r}
+# Retain components that explain a percentage (%) of the variance
+num_components <- which(cumulative_variance_explained >= 0.86)[1]
+
+# Step 5: Select the desired number of principal components
+selected_pcs <- pcs[, 1:num_components]
+```
+
+```{r}
+print(selected_pcs)
+```
+
+# 05 - Visualization
+
+## Scree Plot
+
+```{r}
+# Step 1: Extract the eigenvalues
+eigenvalues <- pca_result$sdev^2
+
+# Calculate the proportion of variance explained by each PC
+variance_proportion <- eigenvalues / sum(eigenvalues)
+
+# Get Eigenvalue for a scree plot
+scree_data <- data.frame(PrincipalComponent = 1:length(eigenvalues), Eigenvalue = eigenvalues, VarianceProportion = variance_proportion)
+green_scree = '#488959'
+
+# Change the plot size
+options(repr.plot.width=20, repr.plot.height=10)
+
+# Create the scree plot
+scree_plot <- ggplot(data = scree_data, aes(x = PrincipalComponent)) +
+  geom_bar(aes(y = Eigenvalue), stat = "identity", fill = green_scree, width = 0.5) +
+  geom_line(aes(y = Eigenvalue), color = "blue") +
+  geom_text(aes(y = Eigenvalue, label = paste0(round(VarianceProportion * 100, 2), "%")), vjust = -0.5, size = 3, hjust=-0.1) +
+  labs(x = "Principal Component", y = "Eigenvalue", title = "Scree Plot") +
+  theme_minimal()+
+  xlim(0,9.5)
+  
+
+# Step 3: Display the scree plot
+print(scree_plot)
+ggsave("scree_plot_20x10_100.png", plot = scree_plot, width = 20, height = 10, units = "in", dpi = 100)
+
+```
+
+## Biplot
+
+```{r}
+fviz_eig(pca_result, addlabels = TRUE)
+```
+
+```{r}
+fviz_pca_biplot(pca_result, geom = "point", addEllipses = FALSE)
+```
+
+```{r}
+fviz_pca_biplot(pca_result, label = "var",
+                col.var = "magenta")
+```
+
+## Component Contribution
+
+```{r}
+fviz_cos2(pca_result, choice = "var", axes = 1:2)
+```
+
+# 06 - Model Building
+
+```{r}
+# Subset the selected PCs (PC1, PC2, PC6, PC7, PC8)
+pca_matrix <- selected_pcs[, c("PC1", "PC2", "PC6", "PC7", "PC8")]
+
+# Check the first few rows of the feature matrix
+head(pca_matrix)
+```
+
+```{r}
+y = training_set$Survival..As.Expected..STATE.
+# Combine 'y' and 'feature_matrix' into a data frame
+data_for_model <- data.frame(y = y, pca_matrix)
+
+# Fit a multiple linear regression model
+model <- lm(y ~ ., data = data_for_model)
+
+# Print a summary of the regression model
+summary(model)
+```
+
+## Final Model - Principal Component Selection
+
+```{r}
+# Removing 'PC8' since it is not significant; p > 0.05
+pca_sig_matrix <- selected_pcs[, c("PC1", "PC2", "PC6", "PC7")]
+
+# y = training_set$Survival..As.Expected..STATE.
+# Combine 'y' and 'feature_matrix' into a data frame
+data_fin <- data.frame(y = y, pca_sig_matrix)
+
+# Fit a multiple linear regression model
+model_fin <- lm(y ~ ., data = data_fin)
+
+# Print a summary of the regression model
+summary(model_fin)
+```

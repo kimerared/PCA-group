@@ -13,15 +13,16 @@ execute:
 
 ```{r}
 # Install libraries if needed
-#install.packages("caret")
-#install.packages("corrplot")
-#install.packages("Metrics")
-#install.packages("caTools")
-#install.packages("EnvStats")
-#install.packages("car")
-#install.packages("corrr")
-#install.packages("ggcorrplot")
-#install.packages("FactoMineR")
+# install.packages("caret")
+# install.packages("corrplot")
+# install.packages("Metrics")
+# install.packages("caTools")
+# install.packages("EnvStats")
+# install.packages("car")
+# install.packages("corrr")
+# install.packages("ggcorrplot")
+# install.packages("FactoMineR")
+#install.packages("factoextra")
 
 ```
 
@@ -37,7 +38,7 @@ library(car)      # for outliers test
 library(corrr)    # correlation matrix
 library(ggcorrplot) # correlation graph
 library(FactoMineR) # PCA analysis
-  
+library(factoextra)  
 ```
 
 # 01 - Data Preparation
@@ -90,7 +91,7 @@ summary(train_data)
 summary(train_data[, sapply(train_data, is.character)])
 ```
 
-## Standardization
+# 02 - Standardization
 
 ```{r}
 # Scaling Numerical Features
@@ -121,8 +122,42 @@ outliers
 ## Correlations
 
 ```{r}
+# Calculate correlations and round to 2 digits
 corr_matrix <- cor(train_data_sc)
-ggcorrplot(corr_matrix)
+corr_matrix <- round(corr_matrix, digits = 2)
+
+# highly correlated features
+high <- findCorrelation(corr_matrix, cutoff = 0.70)
+
+# Print names of highly correlated features
+names(train_data_sc[, high])
+```
+
+```{r}
+corrplot(corr_matrix, order = 'AOE',
+         tl.pos = 'n',
+         #tl.cex = 0.3,
+         cl.pos = 'n', 
+         col = COL2('PiYG'),
+         type = "lower"
+         )
+
+```
+
+```{r}
+## leave blank on non-significant coefficient
+## add significant correlation coefficients
+corrplot(corr_matrix, method = 'circle', type = 'lower', 
+         insig='blank', #addCoef.col ='black', 
+         order = 'AOE', diag=FALSE,
+         number.cex = 0.3,  # size of coefficient
+         tl.cex = 0.4, # size of text label
+         tl.srt = 3, # degree of text label
+         cl.align.text = 'r',
+         cl.ratio = 0.1,
+         tl.pos = "ld",
+         tl.col = "black"
+)
 ```
 
 ## Splitting data into Features and Target
@@ -148,6 +183,10 @@ test_set <- test_set[, !(names(test_set) %in% cols_to_remove)]
 
 ```
 
+# 03 - Model Training
+
+## Multiple Linear Regression - Full Model
+
 ```{r}
 # Fit a multiple regression model
 model <- lm(training_set$Survival..As.Expected..STATE. ~ ., training_set)
@@ -157,7 +196,7 @@ summary(model)
 
 ```
 
-# 03 - PCA
+# 04 - Feature Extraction - PCA
 
 ```{r}
 # Step 2: Apply PCA using prcomp()
@@ -177,12 +216,18 @@ variance_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
 
 # Cumulative proportion of variance explained
 cumulative_variance_explained <- cumsum(variance_explained)
+
+# Summary of Analysis
+summary(pca_result)
 ```
 
 ## Components
 
 ```{r}
 print(cumulative_variance_explained)
+
+# Elements of PCA objects
+names(pca_result)
 ```
 
 ```{r}
@@ -197,7 +242,9 @@ selected_pcs <- pcs[, 1:num_components]
 print(selected_pcs)
 ```
 
-# 04 - Visualization
+# 05 - Visualization
+
+## Scree Plot
 
 ```{r}
 # Step 1: Extract the eigenvalues
@@ -206,19 +253,27 @@ eigenvalues <- pca_result$sdev^2
 # Calculate the proportion of variance explained by each PC
 variance_proportion <- eigenvalues / sum(eigenvalues)
 
-# Step 2: Create a scree plot
+# Get Eigenvalue for a scree plot
 scree_data <- data.frame(PrincipalComponent = 1:length(eigenvalues), Eigenvalue = eigenvalues, VarianceProportion = variance_proportion)
 green_scree = '#488959'
 
+# Change the plot size
+options(repr.plot.width=20, repr.plot.height=10)
+
+# Create the scree plot
 scree_plot <- ggplot(data = scree_data, aes(x = PrincipalComponent)) +
   geom_bar(aes(y = Eigenvalue), stat = "identity", fill = green_scree, width = 0.5) +
   geom_line(aes(y = Eigenvalue), color = "blue") +
-  geom_text(aes(y = Eigenvalue, label = paste0(round(VarianceProportion * 100, 2), "%")), vjust = -0.5, size = 3) +
+  geom_text(aes(y = Eigenvalue, label = paste0(round(VarianceProportion * 100, 2), "%")), vjust = -0.5, size = 3, hjust=-0.1) +
   labs(x = "Principal Component", y = "Eigenvalue", title = "Scree Plot") +
-  theme_minimal()
+  theme_minimal()+
+  xlim(0,9.5)
+  
 
 # Step 3: Display the scree plot
 print(scree_plot)
+ggsave("scree_plot_20x10_100.png", plot = scree_plot, width = 20, height = 10, units = "in", dpi = 100)
+
 ```
 
 ```{r}
@@ -243,46 +298,61 @@ ggplot(data = as.data.frame(selected_pcs), aes(x = PC1, y = PC2)) +
 geom_point()
 ```
 
+## Biplot
+
 ```{r}
-# Perform Kernel PCA
-library(kernlab)
-kpca <- kpca(~., data = data.frame(X_train), kernel = "vanilladot", features = 8)
-X_train_kpca <- as.data.frame(predict(kpca, data.frame(X_train)))
-X_test_kpca <- as.data.frame(predict(kpca, data.frame(X_test)))
+fviz_pca_biplot(pca_result)
+```
 
-# Train a linear regression model on the Kernel PCA components
-linear_reg_kpca <- lm(y_train ~ ., data = data.frame(y_train, X_train_kpca))
-y_pred_kpca <- predict(linear_reg_kpca, newdata = data.frame(X_test_kpca))
+```{r}
+fviz_pca_biplot(pca_result, label = "var",
+                col.var = "magenta")
+```
 
-# Evaluate the Kernel PCA model
-mse_kpca <- mse(y_test, y_pred_kpca)
-r2_kpca <- R2(y_test, y_pred_kpca)
+```{r}
+fviz_cos2(pca_result, choice = "var", axes = 1:2)
+```
 
-cat("Mean Squared Error (Kernel PCA):", mse_kpca, "\n")
-cat("R-squared (Kernel PCA):", r2_kpca, "\n")
-
-# Calculate the adjusted R-squared for Kernel PCA
-n <- length(y)  # Number of observations
-p <- ncol(X_train_kpca)  # Number of predictors (independent variables/features)
-adjusted_r_squared_kpca <- 1 - ((1 - r2_kpca) * (n - 1)/ (n - p - 1))
-
-cat("Adjusted R-squared (Kernel PCA):", adjusted_r_squared_kpca, "\n")
-
-# Extract coefficients and intercept from the Kernel PCA model
-coefficients_kpca <- coef(linear_reg_kpca)
-intercept_kpca <- coefficients_kpca[1]
-
-cat("Coefficients (Kernel PCA):", coefficients_kpca[-1], "\n")
-cat("Intercept (Kernel PCA):", intercept_kpca, "\n")
-
-# Plot Kernel PCA components
-library(ggplot2)
-X_train_kpca_plot <- data.frame(PC1 = X_train_kpca$PC1, PC2 = X_train_kpca$PC2, Target = y_train)
-ggplot(X_train_kpca_plot, aes(x = PC1, y = PC2, color = Target)) +
-  geom_point() +
-  xlab('First Principal Component (Kernel PCA)') +
-  ylab('Second Principal Component (Kernel PCA)') +
-  ggtitle('Kernel PCA - First Two Principal Components') +
-  scale_color_gradient(low = "blue", high = "red")
+```{r}
+# # Perform Kernel PCA
+# library(kernlab)
+# kpca <- kpca(~., data = data.frame(X_train), kernel = "vanilladot", features = 8)
+# X_train_kpca <- as.data.frame(predict(kpca, data.frame(X_train)))
+# X_test_kpca <- as.data.frame(predict(kpca, data.frame(X_test)))
+# 
+# # Train a linear regression model on the Kernel PCA components
+# linear_reg_kpca <- lm(y_train ~ ., data = data.frame(y_train, X_train_kpca))
+# y_pred_kpca <- predict(linear_reg_kpca, newdata = data.frame(X_test_kpca))
+# 
+# # Evaluate the Kernel PCA model
+# mse_kpca <- mse(y_test, y_pred_kpca)
+# r2_kpca <- R2(y_test, y_pred_kpca)
+# 
+# cat("Mean Squared Error (Kernel PCA):", mse_kpca, "\n")
+# cat("R-squared (Kernel PCA):", r2_kpca, "\n")
+# 
+# # Calculate the adjusted R-squared for Kernel PCA
+# n <- length(y)  # Number of observations
+# p <- ncol(X_train_kpca)  # Number of predictors (independent variables/features)
+# adjusted_r_squared_kpca <- 1 - ((1 - r2_kpca) * (n - 1)/ (n - p - 1))
+# 
+# cat("Adjusted R-squared (Kernel PCA):", adjusted_r_squared_kpca, "\n")
+# 
+# # Extract coefficients and intercept from the Kernel PCA model
+# coefficients_kpca <- coef(linear_reg_kpca)
+# intercept_kpca <- coefficients_kpca[1]
+# 
+# cat("Coefficients (Kernel PCA):", coefficients_kpca[-1], "\n")
+# cat("Intercept (Kernel PCA):", intercept_kpca, "\n")
+# 
+# # Plot Kernel PCA components
+# library(ggplot2)
+# X_train_kpca_plot <- data.frame(PC1 = X_train_kpca$PC1, PC2 = X_train_kpca$PC2, Target = y_train)
+# ggplot(X_train_kpca_plot, aes(x = PC1, y = PC2, color = Target)) +
+#   geom_point() +
+#   xlab('First Principal Component (Kernel PCA)') +
+#   ylab('Second Principal Component (Kernel PCA)') +
+#   ggtitle('Kernel PCA - First Two Principal Components') +
+#   scale_color_gradient(low = "blue", high = "red")
 
 ```

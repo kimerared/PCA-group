@@ -25,10 +25,9 @@ execute:
 # install.packages("factoextra")
 # install.packages("pls")
 # install.packages("e1071")
-#install.packages("xgboost")
 ```
 
-```{r setup, echo = TRUE, warnings = FALSE, message = FALSE}}
+```{r, warnings = FALSE, message = FALSE}
 # Load necessary libraries
 library(tidyr)    # for handling missing values
 library(EnvStats) # for rosnerTest
@@ -43,7 +42,6 @@ library(FactoMineR) # PCA analysis
 library(factoextra) # PCA plots
 library(pls)        # PC regression
 library(e1071)      # to fit transform PCA  
-#library(xgboost)  
 ```
 
 # 01 - Data Preparation
@@ -78,7 +76,7 @@ train_data$State <- NULL
 # Impute missing values with the mean
 for (col in colnames(train_data)) {
   mean_value <- mean(train_data[[col]], na.rm = TRUE)
-  train_data[[col]] <- ifelse(is.na(train_data[[col]]), mean_value, train_data[[col]])
+  train_data[[col]] <- ifelse(is.na(train_data[[col]]), mean_value,     train_data[[col]])
 }
 ```
 
@@ -414,7 +412,7 @@ y_test
 
 # 08 - Training Conclusion
 
-In conclusion, this project has demonstrated the effectiveness of Principal Component Analysis (PCA) in dimensionality reduction with the following key points:
+In conclusion, this project has demonstrated the effectiveness of Principal Component Analysis (PCA) in dimension reduction with the following key points:
 
 -   PCA was able to reduce from 37 features down to just 2 principal components.
 

@@ -132,7 +132,7 @@ boxplot(train_data_sc, main = "Boxplot of Values")
 
 -   There are high correlated features.
 
--   Multicollinearity is present in the data set
+-   Multicollinearity is present in the data set.
 
 ```{r}
 # Calculate correlations and round to 2 digits
@@ -410,9 +410,13 @@ y_pred
 y_test
 ```
 
-# 08 - Training Conclusion
+# 08 - Conclusion
 
-In conclusion, this project has demonstrated the effectiveness of Principal Component Analysis (PCA) in dimension reduction with the following key points:
+This project has demonstrated the effectiveness of Principal Component Analysis (PCA) in dimension reduction with the following key points:
+
+-   During data preparation, the mean was used to impute missing values.
+
+-   The data contained multicollinearity with high correlated features.
 
 -   PCA was able to reduce from 37 features down to just 2 principal components.
 

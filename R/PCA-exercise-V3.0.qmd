@@ -64,7 +64,7 @@ my_seed = 95
 
 ## Impute Missing Values
 
--   Replace missing values with the median.
+-   Replace missing values with the mean.
 
 ```{r}
 # Count the number of missing values in each column
@@ -417,6 +417,8 @@ This project has demonstrated the effectiveness of Principal Component Analysis 
 -   During data preparation, the mean was used to impute missing values.
 
 -   The data contained multicollinearity with high correlated features.
+
+-   Singular Value Decomposition was used to apply PCA using prcomp() function.
 
 -   PCA was able to reduce from 37 features down to just 2 principal components.
 

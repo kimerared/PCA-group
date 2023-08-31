@@ -43,7 +43,7 @@ library(FactoMineR) # PCA analysis
 library(factoextra) # PCA plots
 library(pls)        # PC regression
 library(e1071)      # to fit transform PCA  
-library(plotly)
+# library(plotly)
 ```
 
 # 01 - Data Preparation
@@ -299,7 +299,7 @@ reg_model <- lm(Survival..As.Expected..STATE. ~ ., data = training_set)
 summary(reg_model)
 
 # Calculate PRESS
-cat("PRESS: ", PRESS(reg_model))
+# cat("PRESS: ", PRESS(reg_model))
 ```
 
 ## PCA Linear Regression - 2 Principal Components
@@ -322,8 +322,8 @@ reg_model <- lm(Survival..As.Expected..STATE. ~ .,
 summary(reg_model)
 
 # Calculate PRESS
-cat("PRESS: ", PRESS(reg_model), "\n")
-cat("Predicted R^2: ", pred_r_squared(reg_model), "\n")
+# cat("PRESS: ", PRESS(reg_model), "\n")
+# cat("Predicted R^2: ", pred_r_squared(reg_model), "\n")
 ```
 
 ## **Principal Components Regression**
@@ -383,6 +383,31 @@ model_cv <- train(Survival..As.Expected..STATE. ~ .,
 # Print Model Performance
 print(model_cv)
 
+```
+
+```{r}
+# Reproducible random sampling
+set.seed(my_seed)
+
+# Cross-validation with n folds
+cv10 <- trainControl(method = "cv", number = 10)
+
+# Training the model
+model_cv <- train(Survival..As.Expected..STATE. ~ ., 
+                  data = train_pca,
+                  method = "lm",
+                  trControl = cv10)
+
+model_cv$resample
+# Obtain cross-validated resampling results
+cv_results <- resamples(list(Model = model_cv))
+
+# Extract PRESS and predicted R-squared
+press_values <- cv_results$pred$Resample
+predicted_r_squared <- 1 - (press_values / sum((train_pca$Survival..As.Expected..STATE. - mean(train_pca$Survival..As.Expected..STATE.))^2))
+
+# 'press_values' contains the PRESS values for each fold
+# 'predicted_r_squared' contains the predicted R-squared values for each fold
 
 ```
 
@@ -425,7 +450,7 @@ pred_r_squared <- function(linear.model) {
 
 
 # Calculate predicted R^2
-pred_r2 <- pred_r_squared(pcr_model)
+pred_r2 <- pred_r_squared(model_cv)
 
 # Calculate Mean Absolute Error (MAE)
 mae <- mean(abs(y_test - y_pred))

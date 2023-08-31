@@ -25,6 +25,7 @@ execute:
 # install.packages("factoextra")
 # install.packages("pls")
 # install.packages("e1071")
+ # install.packages("plotly")
 ```
 
 ```{r, warnings = FALSE, message = FALSE}
@@ -42,6 +43,7 @@ library(FactoMineR) # PCA analysis
 library(factoextra) # PCA plots
 library(pls)        # PC regression
 library(e1071)      # to fit transform PCA  
+library(plotly)
 ```
 
 # 01 - Data Preparation
@@ -112,9 +114,8 @@ target_index <- grep("Survival..As.Expected..STATE.",
 
 ```{r}
 # Standardization Numerical Features
-train_data_sc <- scale(train_data[-target_index])
+train_data_sc <- scale(train_data[, -target_index])
 
-head(train_data_sc)
 ```
 
 # 03 - PCA Analysis
@@ -145,7 +146,21 @@ high
 
 ```
 
-# 04 - PCA - Singular Value Decomposition
+## Full Model Regression
+
+-   The Adjusted R\^2 = 99.99% is an indication of overfitting, or bias.
+
+```{r}
+set.seed(my_seed)
+
+# Fit a multiple linear regression model
+full_model <- lm(Survival..As.Expected..STATE. ~ ., data = train_data)
+
+# Print a summary of the regression model
+summary(full_model)
+```
+
+# 04 - SVD - Singular Value Decomposition
 
 -   Note: The Spectral Decomposition approach is used with the princomp() function.
 
@@ -223,64 +238,58 @@ fviz_pca_var(data_pca, col.var = "contrib",
 
 # 06 - Model Building
 
-## 
-
 ## Data Splitting into Training & Test set
 
 ```{r}
+# reproducible random sampling
 set.seed(my_seed)  
-is.atomic(train_data_sc)  
-# Convert vectors to dataframe 
-train_data_sc <- as.data.frame(train_data_sc)  
+ 
 # Create Target y-variable 
-y <- train_data_sc$Survival..As.Expected..STATE.  
+y <- train_data$Survival..As.Expected..STATE.  
 # Split the data into training and test sets 
 split <- sample.split(y, SplitRatio = 0.7) 
-training_set <- subset(train_data_sc, split == TRUE) 
-test_set <- subset(train_data_sc, split == FALSE) 
+training_set <- subset(train_data, split == TRUE) 
+test_set <- subset(train_data, split == FALSE) 
 ```
 
 ## Standardization
 
--   It is important to Mean-Center the data prior to model building to ensure the first Principal Component is in the direction of maximum variance.
+-   It is important to Mean-Center the data prior to PCA model building to ensure the first Principal Component is in the direction of maximum variance.
+
+-   Standardization produces Mean = 0, and Variance = 1.
 
 ```{r}
-# Standardization Numerical Features
-train_data_sc <- scale(train_data)
+# Standardization
+training_set[-target_index] = scale(training_set[, -target_index])
+test_set[-target_index] = scale(test_set[, -target_index])
+
 ```
 
-## Create Feature X-matrix & Target y-variable
-
-```{r}
-X_train <- training_set[-target_index] 
-y_train <- training_set$Survival..As.Expected..STATE. 
-X_test <- test_set[-target_index] 
-y_test <- test_set$Survival..As.Expected..STATE. 
-```
-
-**Principal Components Regression** -- PCA is used to calculate principal components that can then be used in principal components regression. This type of regression is often used when multicollinearity exists between predictors in a data set.
+## Applying PCA to Training & Test sets
 
 ```{r}
 # Perform Principal Component Analysis (PCA) preprocessing on the training data
-pca <- preProcess(X_train, method = 'pca', pComp = 8)
+pca <- preProcess(training_set[, -target_index], 
+                  method = 'pca', pComp = 8)
 
-# Apply PCA transformation to the training set
+# Apply PCA transformation to original training set
 training_set <- predict(pca, training_set)
 
-# Reorder columns, moving the first principal component to the end
+# Reorder columns, moving the dependent feature index to the end
 training_set <- training_set[c(2:9, 1)]
 
-# Apply PCA transformation to the test set
+# Apply PCA transformation to original test set
 test_set <- predict(pca, test_set)
 
-# Reorder columns in the test set, following the same order as in the training set
+# Reorder columns, moving the dependent feature index to the end
 test_set <- test_set[c(2:9, 1)]
 
 ```
 
-## Linear Regression - 8 Principal Components
+## PCA Linear Regression - 8 Principal Components
 
 ```{r}
+# reproducible random sampling
 set.seed(my_seed)
 
 # Fit a multiple linear regression model
@@ -288,6 +297,9 @@ reg_model <- lm(Survival..As.Expected..STATE. ~ ., data = training_set)
 
 # Print a summary of the regression model
 summary(reg_model)
+
+# Calculate PRESS
+cat("PRESS: ", PRESS(reg_model))
 ```
 
 ## PCA Linear Regression - 2 Principal Components
@@ -299,6 +311,7 @@ train_pca <- training_set[, significant_pcs]
 ```
 
 ```{r}
+# reproducible random sampling
 set.seed(my_seed)
 
 # Fit a multiple linear regression model
@@ -307,6 +320,27 @@ reg_model <- lm(Survival..As.Expected..STATE. ~ .,
 
 # Print a summary of the regression model
 summary(reg_model)
+
+# Calculate PRESS
+cat("PRESS: ", PRESS(reg_model), "\n")
+cat("Predicted R^2: ", pred_r_squared(reg_model), "\n")
+```
+
+## **Principal Components Regression**
+
+-   PCA is used to calculate principal components that can then be used in principal components regression. This type of regression is often used when multicollinearity exists between predictors in a data set.
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+y = train_pca$Survival..As.Expected..STATE.
+
+# fit PCR
+pcr_model <- pcr(y ~ PC1+PC2, data=train_pca, validation="CV")
+
+summary(pcr_model)
+
 ```
 
 ## Repeated Cross-Validation
@@ -317,7 +351,7 @@ set.seed(my_seed)
 
 # Repeated cross-validation with 5 folds, 3 repetitions
 train_control <- trainControl(method = "repeatedcv",
-							number = 5, repeats = 3)
+							number = 10, repeats = 3)
 
 # training the model 
 model_cv_repeat <- train(Survival..As.Expected..STATE. ~ ., 
@@ -336,43 +370,51 @@ print(model_cv_repeat)
 # reproducible random sampling
 set.seed(my_seed)
 
-# Cross-validation with 5 folds
-train_control <- trainControl(method = "cv",
-							number = 5)
+# Cross-validation with n folds
+cv10 <- trainControl(method = "cv",
+							number = 10)
 
 # training the model 
 model_cv <- train(Survival..As.Expected..STATE. ~ ., 
                   data = train_pca,
                   method = "lm",
-                  trControl = train_control)
+                  trControl = cv10)
 
 # Print Model Performance
 print(model_cv)
+
+
 ```
 
 # 07 - Predictions
 
 ```{r}
-y_pred = predict(reg_model, newdata = test_set[-9])
+# Find the index position of the target feature 
+pred_target_index <- grep("Survival..As.Expected..STATE.", 
+                     colnames(test_set))
+```
+
+```{r}
+y_test <- test_set$Survival..As.Expected..STATE.
+y_pred = predict(model_cv, newdata = test_set[, -pred_target_index])
 
 ```
 
 ```{r}
 #PRESS - predicted residual sums of squares
-
 PRESS <- function(linear.model) {
-  #' calculate the predictive residuals
+  # calculate the predictive residuals
   pr <- residuals(linear.model)/(1-lm.influence(linear.model)$hat)
-  #' calculate the PRESS
+  # calculate the PRESS
   PRESS <- sum(pr^2)
   
   return(PRESS)
 }
 
 pred_r_squared <- function(linear.model) {
-  #' Use anova() to get the sum of squares for the linear model
+  # Use anova() to get the sum of squares for the linear model
   lm.anova <- anova(linear.model)
-  #' Calculate the total sum of squares
+  # Calculate the total sum of squares
   tss <- sum(lm.anova$'Sum Sq')
   # Calculate the predictive R^2
   pred.r.squared <- 1-PRESS(linear.model)/(tss)
@@ -380,8 +422,10 @@ pred_r_squared <- function(linear.model) {
   return(pred.r.squared)
 }
 
+
+
 # Calculate predicted R^2
-pred_r2 <- pred_r_squared(reg_model)
+pred_r2 <- pred_r_squared(pcr_model)
 
 # Calculate Mean Absolute Error (MAE)
 mae <- mean(abs(y_test - y_pred))
@@ -420,9 +464,7 @@ In conclusion, this project has demonstrated the effectiveness of Principal Comp
 
 -   PCA was able to reduce from 37 features down to just 2 principal components.
 
--   The best score of R\^2 = 96.57% is from Multiple Linear Regression with 2 Principal Components.
-
--   The repeated K-fold cross-validation provided results of R\^2 = 95.50%.
+-   The best score of R\^2 = 97.61% was from Multiple Linear Regression with Cross-validation.
 
 -   The predicted R\^2 = 95.38 using the Multiple Linear Regression with 2 Principal Components.
 

@@ -259,13 +259,17 @@ test_set <- subset(train_data, split == FALSE)
 -   Standardization produces Mean = 0, and Variance = 1.
 
 ```{r}
+train_mean <- mean(unlist(training_set[, -target_index]))
+train_sd <- sd(unlist(training_set[, -target_index]))
+
 # Standardization
-# training_set[-target_index] = scale(training_set[, -target_index])
-# test_set[-target_index] = scale(test_set[, -target_index])
+training_set[,-target_index] = scale(training_set[, -target_index])
+test_set[,-target_index] = scale(test_set[, -target_index])
 
 
-training_set = as.data.frame(scale(training_set))
-test_set = as.data.frame(scale(test_set))
+
+# training_set = as.data.frame(scale(training_set))
+# test_set = as.data.frame(scale(test_set))
 
 ```
 
@@ -274,7 +278,7 @@ test_set = as.data.frame(scale(test_set))
 ```{r}
 # Perform Principal Component Analysis (PCA) preprocessing on the training data
 pca <- preProcess(training_set[, -target_index], 
-                  method = 'pca', pComp = 8)
+                  method = 'pca', pcaComp = 8)
 
 # Apply PCA transformation to original training set
 training_set <- predict(pca, training_set)
@@ -315,7 +319,7 @@ pred_r_squared <- function(linear.model) {
 }
 ```
 
-## PCA Linear Regression - 8 Principal Components
+## PCA Full Model - 8 Principal Components
 
 ```{r}
 # reproducible random sampling
@@ -334,12 +338,24 @@ cat("PRESS: ", PRESS(pca_full_model), "\n")
 cat("Predicted R^2: ", pred_r_squared(pca_full_model), "\n")
 ```
 
-## PCA Linear Regression - 2 Principal Components
+### Visualization of Uncorreled PCA Matrix
+
+```{r}
+# replacing response feature name
+colnames(training_set)[which(names(training_set) == "Survival..As.Expected..STATE.")] <- "Expect_Survival"
+
+# Visual of Principal Components un-correlation
+corr_matrix <- cor(training_set)
+ggcorrplot(corr_matrix)
+```
+
+## PCA - 2 Principal Components
 
 ```{r}
 # Create a subset with 2 principal components
 significant_pcs = c(1,2,9)
 train_pca <- training_set[, significant_pcs]
+test_pca <- test_set[, significant_pcs]
 ```
 
 ```{r}
@@ -347,7 +363,7 @@ train_pca <- training_set[, significant_pcs]
 set.seed(my_seed)
 
 # Fit a multiple linear regression model
-reg_model <- lm(Survival..As.Expected..STATE. ~ ., 
+reg_model <- lm(Expect_Survival ~ ., 
                 data = train_pca)
 
 # Print a summary of the regression model
@@ -368,7 +384,7 @@ cat("Predicted R^2: ", pred_r_squared(reg_model), "\n")
 # reproducible random sampling
 set.seed(my_seed)
 
-y = train_pca$Survival..As.Expected..STATE.
+y = train_pca$Expect_Survival
 
 # fit PCR
 pcr_model <- pcr(y ~ PC1+PC2, data=train_pca, validation="CV")
@@ -388,13 +404,16 @@ train_control <- trainControl(method = "repeatedcv",
 							number = 10, repeats = 3)
 
 # training the model 
-model_cv_repeat <- train(Survival..As.Expected..STATE. ~ ., 
+model_cv_repeat <- train(Expect_Survival ~ ., 
                          data = train_pca,
                          method = "lm",
                          trControl = train_control)
 
-# Print Model Performance
+
+# Print Overall Model Performance
 print(model_cv_repeat)
+
+summary(model_cv_repeat)
 
 ```
 
@@ -405,17 +424,22 @@ print(model_cv_repeat)
 set.seed(my_seed)
 
 # Cross-validation with n folds
-cv10 <- trainControl(method = "cv",
-							number = 10)
+k_10 <- trainControl(method = "cv", number = 10,
+                     savePredictions = "all")
 
 # training the model 
-model_cv <- train(Survival..As.Expected..STATE. ~ ., 
+model_cv <- train(Expect_Survival ~ ., 
                   data = train_pca,
                   method = "lm",
-                  trControl = cv10)
+                  trControl = k_10)
+
+# Print results from each fold
+print(model_cv$pred)
 
 # Print Model Performance
 print(model_cv)
+
+summary(model_cv)
 
 ```
 
@@ -424,41 +448,19 @@ print(model_cv)
 ```{r}
 # Find the index position of the target feature 
 pred_target_index <- grep("Survival..As.Expected..STATE.", 
-                     colnames(test_set))
+                     colnames(test_pca))
 ```
 
 ```{r}
-y_test <- test_set$Survival..As.Expected..STATE.
-y_pred = predict(model_cv, newdata = test_set[, -pred_target_index])
+y_test <- test_pca[pred_target_index]
+y_pred = predict(model_cv, newdata = test_pca[, -pred_target_index])
 
 ```
 
 ```{r}
-# #PRESS - predicted residual sums of squares
-# PRESS <- function(linear.model) {
-#   # calculate the predictive residuals
-#   pr <- residuals(linear.model)/(1-lm.influence(linear.model)$hat)
-#   # calculate the PRESS
-#   PRESS <- sum(pr^2)
-#   
-#   return(PRESS)
-# }
-# 
-# pred_r_squared <- function(linear.model) {
-#   # Use anova() to get the sum of squares for the linear model
-#   lm.anova <- anova(linear.model)
-#   # Calculate the total sum of squares
-#   tss <- sum(lm.anova$'Sum Sq')
-#   # Calculate the predictive R^2
-#   pred.r.squared <- 1-PRESS(linear.model)/(tss)
-#   
-#   return(pred.r.squared)
-# }
-
-
 
 # Calculate predicted R^2
-#pred_r2 <- pred_r_squared(reg_model)
+#pred_r2 <- pred_r_squared(model_cv)
 
 # Calculate Mean Absolute Error (MAE)
 mae <- mean(abs(y_test - y_pred))
@@ -479,16 +481,18 @@ ssr <- sum((y_pred - mean(y_test))^2)  # Regression sum of squares
 cat("Mean Absolute Error (MAE):", mae, "\n")
 cat("Mean Squared Error (MSE):", mse, "\n")
 cat("Root Mean Squared Error (RMSE):", rmse, "\n")
-# cat("Predicted R^2:", pred_r2, "\n")
+#cat("Predicted R^2:", pred_r2, "\n")
 
 ```
 
 ```{r}
-y_pred
+as.data.frame.integer(y_pred)
+
 ```
 
 ```{r}
 y_test
+
 ```
 
 # 08 - Training Conclusion
@@ -500,6 +504,8 @@ In conclusion, this project has demonstrated the effectiveness of Principal Comp
 -   The best score of R\^2 = 97.61% was from Multiple Linear Regression with Cross-validation.
 
 -   The predicted R\^2 = 95.38 using the Multiple Linear Regression with 2 Principal Components.
+
+-   The average deviation between the predicted value, and observed value for 'Expected Survival' is RMSE = 94.08.
 
 -   The model has not been exposed to unseen data with a large amount of observations to asses its robustness, and reliability.
 
@@ -513,7 +519,7 @@ set.seed(my_seed)
 cv10 <- trainControl(method = "cv", number = 10)
 
 # Training the model
-model_cv <- train(Survival..As.Expected..STATE. ~ ., 
+model_cv <- train(Expect_Survival ~ ., 
                   data = train_pca,
                   method = "lm",
                   trControl = cv10)
@@ -521,10 +527,10 @@ model_cv <- train(Survival..As.Expected..STATE. ~ .,
 cv_results = model_cv$results
 
 # Calculate PRESS = (RMSE^2) * n-2
-press_values <- (cv_results$RMSE^2) * (length(train_pca$Survival..As.Expected..STATE.) - 2)
+press_values <- (cv_results$RMSE^2) * (length(train_pca$Expect_Survival) - 2)
 
 # Calculate TSS (Total Sum of Squares)
-tss <- sum((train_pca$Survival..As.Expected..STATE. - mean(train_pca$Survival..As.Expected..STATE.))^2)
+tss <- sum((train_pca$Expect_Survival - mean(train_pca$Expect_Survival))^2)
 
 # Calculate predicted R-squared
 cv_predicted_r2 <- 1 - (press_values / tss)

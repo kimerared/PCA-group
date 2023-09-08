@@ -503,7 +503,7 @@ In conclusion, this project has demonstrated the effectiveness of Principal Comp
 
 -   The best score of R\^2 = 97.61% was from Multiple Linear Regression with Cross-validation.
 
--   The predicted R\^2 = 95.38 using the Multiple Linear Regression with 2 Principal Components.
+-   The predicted R\^2 = 96.84%
 
 -   The average deviation between the predicted value, and observed value for 'Expected Survival' is RMSE = 94.08.
 

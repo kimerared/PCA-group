@@ -108,7 +108,8 @@ str(train_data)
 
 ```{r}
 # Find the index position of the target feature 
-target_index <- grep("Survival..As.Expected..STATE.", 
+target_name <- "Survival..As.Expected..STATE."
+target_index <- grep(target_name, 
                      colnames(train_data))
 ```
 
@@ -148,7 +149,7 @@ high
 
 ## Full Model Regression
 
--   The Adjusted R\^2 = 99.99% is an indication of overfitting, or bias.
+-   The Adjusted R\^2 = 99.99% is an indication of over-fitting, or bias.
 
 ```{r}
 set.seed(my_seed)
@@ -266,10 +267,8 @@ train_sd <- sd(unlist(training_set[, -target_index]))
 training_set[,-target_index] = scale(training_set[, -target_index])
 test_set[,-target_index] = scale(test_set[, -target_index])
 
-
-
-# training_set = as.data.frame(scale(training_set))
-# test_set = as.data.frame(scale(test_set))
+# training_set[,-target_index] = scale(training_set)
+# test_set[,-target_index] = scale(test_set)
 
 ```
 
@@ -338,11 +337,11 @@ cat("PRESS: ", PRESS(pca_full_model), "\n")
 cat("Predicted R^2: ", pred_r_squared(pca_full_model), "\n")
 ```
 
-### Visualization of Uncorreled PCA Matrix
+### Visualization of Uncorrelated PCA Matrix
 
 ```{r}
 # replacing response feature name
-colnames(training_set)[which(names(training_set) == "Survival..As.Expected..STATE.")] <- "Expect_Survival"
+colnames(training_set)[which(names(training_set) == target_name)] <- "Expect_Survival"
 
 # Visual of Principal Components un-correlation
 corr_matrix <- cor(training_set)
@@ -401,7 +400,7 @@ set.seed(my_seed)
 
 # Repeated cross-validation with 5 folds, 3 repetitions
 train_control <- trainControl(method = "repeatedcv",
-							number = 10, repeats = 3)
+							                number = 10, repeats = 3)
 
 # training the model 
 model_cv_repeat <- train(Expect_Survival ~ ., 
@@ -413,8 +412,6 @@ model_cv_repeat <- train(Expect_Survival ~ .,
 # Print Overall Model Performance
 print(model_cv_repeat)
 
-summary(model_cv_repeat)
-
 ```
 
 ## Cross-Validation
@@ -424,8 +421,7 @@ summary(model_cv_repeat)
 set.seed(my_seed)
 
 # Cross-validation with n folds
-k_10 <- trainControl(method = "cv", number = 10,
-                     savePredictions = "all")
+k_10 <- trainControl(method = "cv", number = 10)
 
 # training the model 
 model_cv <- train(Expect_Survival ~ ., 
@@ -433,26 +429,41 @@ model_cv <- train(Expect_Survival ~ .,
                   method = "lm",
                   trControl = k_10)
 
-# Print results from each fold
-print(model_cv$pred)
-
 # Print Model Performance
 print(model_cv)
 
-summary(model_cv)
+cv_results = model_cv$results
 
+# Calculate PRESS = (RMSE^2) * n-2
+press_values <- (cv_results$RMSE^2) * (length(train_pca$Expect_Survival) - 2)
+
+# Calculate TSS (Total Sum of Squares)
+tss <- sum((train_pca$Expect_Survival - mean(train_pca$Expect_Survival))^2)
+
+# Calculate predicted R-squared
+cv_predicted_r2 <- 1 - (press_values / tss)
+
+cat("\nPRESS:", press_values, "\n")
+cat("Predicted R^2:", cv_predicted_r2, "\n")
 ```
 
 # 07 - Predictions
 
 ```{r}
-# Find the index position of the target feature 
-pred_target_index <- grep("Survival..As.Expected..STATE.", 
+# Find the index position of the target feature
+pred_target_index <- grep(target_name, 
                      colnames(test_pca))
 ```
 
 ```{r}
+# Standardization of y-test set to prevent data leakage
 y_test <- test_pca[pred_target_index]
+
+# Predictions will be on the same scale for comparison
+y_test = (y_test - train_mean) / train_sd
+#y_test = scale(y_test, center = train_mean, scale = train_sd)
+
+# Predictions
 y_pred = predict(model_cv, newdata = test_pca[, -pred_target_index])
 
 ```
@@ -486,8 +497,8 @@ cat("Root Mean Squared Error (RMSE):", rmse, "\n")
 ```
 
 ```{r}
-as.data.frame.integer(y_pred)
-
+as.data.frame(y_pred)
+#y_pred
 ```
 
 ```{r}
@@ -510,32 +521,48 @@ In conclusion, this project has demonstrated the effectiveness of Principal Comp
 -   The model has not been exposed to unseen data with a large amount of observations to asses its robustness, and reliability.
 
 ```{r}
-# Calculate PRESS from Cross-Validation
 
-# Reproducible random sampling
-set.seed(my_seed)
+# reproducible random sampling
+set.seed(my_seed)  
+ 
+# Create Target y-variable 
+# Split the data into training and test sets 
+split <- sample.split(y, SplitRatio = 0.7) 
+train_set <- subset(train_data, split == TRUE) 
+test_set <- subset(train_data, split == FALSE) 
 
-# Cross-validation with n folds
-cv10 <- trainControl(method = "cv", number = 10)
+# Step 2: Standardize the independent variables separately for training and test sets
+# Standardizing using the preProcess function from caret
+preprocess_params <- preProcess(train_set[, -target_index], method = c("center", "scale"))
+train_set[, -target_index] <- predict(preprocess_params, train_set[, -target_index])
+test_set[, -target_index] <- predict(preprocess_params, test_set[, -target_index])
 
-# Training the model
-model_cv <- train(Expect_Survival ~ ., 
-                  data = train_pca,
-                  method = "lm",
-                  trControl = cv10)
+# Step 3: Perform PCA on the standardized training set
+# In this example, we'll retain all principal components for simplicity
+pca_model <- preProcess(train_set[, -target_index], method = "pca")
+train_set_pca <- predict(pca_model, train_set[, -target_index])
+test_set_pca <- predict(pca_model, test_set[, -target_index])
 
-cv_results = model_cv$results
+# Step 4: Select the best principal components based on your criteria
+# In this example, we retain all components, but you can choose based on explained variance
+num_components <- ncol(train_set_pca)
+selected_components <- 1:8
+# selected_components <- 1:num_components  # All components
 
-# Calculate PRESS = (RMSE^2) * n-2
-press_values <- (cv_results$RMSE^2) * (length(train_pca$Expect_Survival) - 2)
+# Step 5: Standardize the dependent variable separately for training and test sets
+preprocess_params_y <- preProcess(as.data.frame(train_set[, target_index], method = c("center", "scale")))
+train_set[, target_index] <- predict(preprocess_params_y, as.data.frame(train_set[, target_index]))
+test_set[, target_index] <- predict(preprocess_params_y, as.data.frame(test_set[, target_index]))
 
-# Calculate TSS (Total Sum of Squares)
-tss <- sum((train_pca$Expect_Survival - mean(train_pca$Expect_Survival))^2)
+# Step 6: Perform linear regression using selected principal components and standardized dependent variable
+model <- train(train_set[, target_index] ~ ., data = cbind(train_set_pca[, selected_components], train_set[, target_index]), method = "lm")
 
-# Calculate predicted R-squared
-cv_predicted_r2 <- 1 - (press_values / tss)
+# Predict on the test set
+predictions <- predict(model, newdata = cbind(test_set_pca[, selected_components], test_set[, target_index]))
 
-cat("PRESS:", press_values, "\n")
-cat("Predicted R^2:", cv_predicted_r2, "\n")
-
+# Calculate and print the model's performance on the test set
+rmse <- RMSE(predictions, test_set[, target_index])
+r_squared <- R2(predictions, test_set[, target_index])
+cat("Root Mean Squared Error (RMSE):", rmse, "\n")
+cat("R-squared (R^2):", r_squared, "\n")
 ```

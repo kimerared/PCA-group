@@ -1,0 +1,59 @@
+---
+title: "EDA"
+author: "Hector Gavilanes"
+format: html
+editor: visual
+---
+
+## Load Libraries
+
+```{r setup, echo=FALSE}
+# Install libraries if needed
+# install.packages("explore")
+# install.packages("tidyverse")
+```
+
+```{r, warnings = FALSE, message = FALSE}
+# Load necessary libraries
+library(tidyverse)
+library(explore)
+```
+
+## Load Data
+
+```{r}
+# clear environment
+rm(list = ls())
+
+# Load dataset
+train_original <- read.csv('../dataset/DFC_STATE.csv')
+
+# Make a working copy
+train_data <- train_original
+```
+
+## EDA
+
+```{r}
+train_data %>% explore()
+```
+
+Report
+
+```{r}
+train_data %>% 
+  report(
+    target = Survival..As.Expected..STATE.,
+    output_dir = "report/",
+    output_file = "eda_report.html" 
+  )
+```
+
+Describe
+
+```{r}
+train_data %>% explore_all(
+  target = Survival..As.Expected..STATE.,
+  ncol = 5
+)
+```

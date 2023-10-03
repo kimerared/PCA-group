@@ -9,14 +9,16 @@ editor: visual
 
 ```{r setup, echo=FALSE}
 # Install libraries if needed
-# install.packages("explore")
+#install.packages("explore")
 # install.packages("tidyverse")
+# install.packages("shiny")
 ```
 
 ```{r, warnings = FALSE, message = FALSE}
 # Load necessary libraries
 library(tidyverse)
 library(explore)
+library(shiny)
 ```
 
 ## Load Data
@@ -54,6 +56,6 @@ Describe
 ```{r}
 train_data %>% explore_all(
   target = Survival..As.Expected..STATE.,
-  ncol = 5
+  ncol = 2
 )
 ```

@@ -51,11 +51,14 @@ train_data %>%
   )
 ```
 
-Describe
+## Data Explorer
 
 ```{r}
-train_data %>% explore_all(
-  target = Survival..As.Expected..STATE.,
-  ncol = 2
-)
+# install.packages("DataExplorer")
+library(DataExplorer)
+```
+
+```{r}
+create_report(train_data)
+data()
 ```

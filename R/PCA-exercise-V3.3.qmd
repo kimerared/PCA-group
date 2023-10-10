@@ -1,0 +1,530 @@
+---
+title: "PCA - Multiple Linear Regression"
+author: "Hector Gavilanes"
+format: html
+editor: visual
+self-contained: true
+execute: 
+  warning: false
+  message: false
+---
+
+## Libraries
+
+```{r setup, echo=FALSE}
+# Install libraries if needed
+# install.packages("caret")
+# install.packages("corrplot")
+# install.packages("Metrics")
+# install.packages("caTools")
+# install.packages("EnvStats")
+# install.packages("car")
+# install.packages("corrr")
+# install.packages("ggcorrplot")
+# install.packages("FactoMineR")
+# install.packages("factoextra")
+# install.packages("pls")
+# install.packages("e1071")
+ # install.packages("plotly")
+```
+
+```{r, warnings = FALSE, message = FALSE}
+# Load necessary libraries
+library(tidyr)    # for handling missing values
+library(EnvStats) # for rosnerTest
+library(caTools)
+library(caret)
+library(corrplot)
+library(Metrics)
+library(car)        # for outliers test
+library(corrr)      # correlation matrix
+library(ggcorrplot) # correlation graph
+library(FactoMineR) # PCA analysis
+library(factoextra) # PCA plots
+library(pls)        # PC regression
+library(e1071)      # to fit transform PCA  
+# library(plotly)
+```
+
+# 01 - Data Preparation
+
+```{r}
+# clear environment
+rm(list = ls())
+
+# Load dataset
+train_original <- read.csv('../dataset/DFC_STATE.csv')
+
+# Make a working copy
+train_data <- train_original
+
+tail(train_data)
+
+# Constant seed
+my_seed = 95
+```
+
+## Impute Missing Values
+
+-   Replace missing values with the mean.
+
+```{r}
+# Count the number of missing values in each column
+colSums(is.na(train_data))
+
+# Remove categorical columns
+train_data$State <- NULL
+
+# Impute missing values with the mean
+for (col in colnames(train_data)) {
+  mean_value <- mean(train_data[[col]], na.rm = TRUE)
+  train_data[[col]] <- ifelse(is.na(train_data[[col]]), mean_value,     train_data[[col]])
+}
+```
+
+```{r}
+# Remove rows with missing values
+train_data <- na.omit(train_data)
+
+# Count the number of missing values in each column
+colSums(is.na(train_data))
+
+# Get duplicated rows
+train_data[duplicated(train_data), ]
+
+# Summary statistics of the data
+summary(train_data)
+
+# Summary statistics of categorical variables
+summary(train_data[, sapply(train_data, is.character)])
+```
+
+```{r}
+# Check dataset structure
+str(train_data)
+```
+
+# 02 - Feature Scaling
+
+```{r}
+# Find the index position of the target feature 
+target_name <- "Survival..As.Expected..STATE."
+target_index <- grep(target_name, 
+                     colnames(train_data))
+```
+
+```{r}
+# Standardization Numerical Features
+train_data_sc <- scale(train_data[, -target_index])
+
+```
+
+# 03 - PCA Analysis
+
+## Outliers
+
+-   There are no outliers in the data frame.
+
+```{r}
+# Plot a boxplot to visualize potential outliers
+boxplot(train_data_sc, main = "Boxplot of Values")
+```
+
+## Correlations
+
+-   There are high correlated features.
+
+-   Multicollinearity is present in the data set
+
+```{r}
+# Calculate correlations and round to 2 digits
+corr_matrix <- cor(train_data_sc)
+corr_matrix <- round(corr_matrix, digits = 2)
+
+# Print names of highly correlated features
+high <- findCorrelation(corr_matrix, cutoff = 0.30, names = TRUE)
+high
+
+```
+
+## Full Model Regression
+
+-   The Adjusted R\^2 = 99.99% is an indication of over-fitting, or bias.
+
+```{r}
+set.seed(my_seed)
+
+# Fit a multiple linear regression model
+full_model <- lm(Survival..As.Expected..STATE. ~ ., data = train_data)
+
+# Print a summary of the regression model
+summary(full_model)
+```
+
+# 04 - SVD - Singular Value Decomposition
+
+-   Note: The Spectral Decomposition approach is used with the princomp() function.
+
+```{r}
+# Apply PCA using prcomp()
+data_pca <- prcomp(train_data_sc)
+summary(data_pca)
+```
+
+## PCA - Elements
+
+-   The loadings are the weights assigned to each variable for that particular principal component. The eigenvectors of the covariance or correlation matrix of the data represent the directions of maximum variance or information in the dataset.
+
+-   The values in **`data_pca$x`** are the coordinates of each observation in the new principal component space. These coordinates are the scores for each observation along each principal component.
+
+```{r}
+# Principal Component scores
+pc_scores <- data_pca$x
+
+# Std Deviation of Components
+component_sdev <- data_pca$sdev
+
+# Eigenvector, or Loadings
+eigenvector <- data_pca$rotation
+
+# Mean of variables
+data_pca$center 
+
+# Scaling factor of Variables
+data_pca$scale
+
+# Print the loadings for the first two principal components
+print("Loadings for the first two principal components:")
+print(eigenvector[, 1:2])
+```
+
+## PCA - Cumulative Variance
+
+```{r}
+# Proportion of variance explained by each PC
+variance_explained <- component_sdev^2 / sum(component_sdev^2)
+
+# Cumulative proportion of variance explained
+cumulative_variance_explained <- cumsum(variance_explained)
+cumulative_variance_explained
+```
+
+## PCA - Number of Principal Components
+
+-   We can conclude that with 9 Principal Components, 86% of the variance is explained.
+
+```{r}
+# Retain components that explain a percentage of the variance
+num_components <- which(cumulative_variance_explained >= 0.86)[1]
+
+# Select the desired number of principal components
+selected_pcs <- pc_scores[, 1:num_components]
+selected_pcs
+```
+
+# 05 - Visualization
+
+## Scree Plot - Cumulative Variance Explained
+
+```{r}
+fviz_eig(data_pca, addlabels = TRUE)
+```
+
+## Biplot
+
+```{r}
+fviz_pca_biplot(data_pca, 
+                geom = c("point", "arrow"),
+                geom.var = "arrow")
+```
+
+```{r}
+# Control variable colors using their contributions
+fviz_pca_var(data_pca, col.var = "contrib",
+   gradient.cols = c("white", "blue", "red"),
+   geom.var = "arrow",
+   ggtheme = theme_minimal())
+```
+
+# 06 - Model Building
+
+## Data Splitting into Training & Test set
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)  
+ 
+# Create Target y-variable 
+y <- train_data$Survival..As.Expected..STATE.  
+# Split the data into training and test sets 
+split <- sample.split(y, SplitRatio = 0.7) 
+training_set <- subset(train_data, split == TRUE) 
+test_set <- subset(train_data, split == FALSE) 
+```
+
+## Standardization
+
+-   It is important to Mean-Center the data prior to PCA model building to ensure the first Principal Component is in the direction of maximum variance.
+
+-   Standardization produces Mean = 0, and Variance = 1.
+
+```{r}
+train_mean <- mean(unlist(training_set[, -target_index]))
+train_sd <- sd(unlist(training_set[, -target_index]))
+
+# Standardization
+training_set[,-target_index] = scale(training_set[, -target_index])
+test_set[,-target_index] = scale(test_set[, -target_index])
+
+# training_set[,-target_index] = scale(training_set)
+# test_set[,-target_index] = scale(test_set)
+
+```
+
+## Applying PCA to Training & Test sets
+
+```{r}
+# Perform Principal Component Analysis (PCA) preprocessing on the training data
+pca <- preProcess(training_set[, -target_index], 
+                  method = 'pca', pcaComp = 8)
+
+# Apply PCA transformation to original training set
+training_set <- predict(pca, training_set)
+
+# Reorder columns, moving the dependent feature index to the end
+training_set <- training_set[c(2:9, 1)]
+
+# Apply PCA transformation to original test set
+test_set <- predict(pca, test_set)
+
+# Reorder columns, moving the dependent feature index to the end
+test_set <- test_set[c(2:9, 1)]
+
+```
+
+## PRESS & Predicted R\^2 Functions
+
+```{r}
+#PRESS - predicted residual sums of squares
+PRESS <- function(linear.model) {
+  # calculate the predictive residuals
+  pr <- residuals(linear.model)/(1-lm.influence(linear.model)$hat)
+  # calculate the PRESS
+  PRESS <- sum(pr^2)
+  
+  return(PRESS)
+}
+
+pred_r_squared <- function(linear.model) {
+  # Use anova() to get the sum of squares for the linear model
+  lm.anova <- anova(linear.model)
+  # Calculate the total sum of squares
+  tss <- sum(lm.anova$'Sum Sq')
+  # Calculate the predictive R^2
+  pred.r.squared <- 1-PRESS(linear.model)/(tss)
+  
+  return(pred.r.squared)
+}
+```
+
+## PCA Full Model - 8 Principal Components
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+# Fit a multiple linear regression model
+pca_full_model <- lm(Survival..As.Expected..STATE. ~ ., data = training_set)
+
+# Print a summary of the regression model
+summary(pca_full_model)
+
+# Calculate PRESS
+cat("PRESS: ", PRESS(pca_full_model), "\n")
+
+# Calculate predicted R^2
+cat("Predicted R^2: ", pred_r_squared(pca_full_model), "\n")
+```
+
+### Visualization of Uncorrelated PCA Matrix
+
+```{r}
+# replacing response feature name
+colnames(training_set)[which(names(training_set) == target_name)] <- "Expect_Survival"
+
+# Visual of Principal Components un-correlation
+corr_matrix <- cor(training_set)
+ggcorrplot(corr_matrix)
+```
+
+## PCA - 2 Principal Components
+
+```{r}
+# Create a subset with 2 principal components
+significant_pcs = c(1,2,9)
+train_pca <- training_set[, significant_pcs]
+test_pca <- test_set[, significant_pcs]
+```
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+# Fit a multiple linear regression model
+reg_model <- lm(Expect_Survival ~ ., 
+                data = train_pca)
+
+# Print a summary of the regression model
+summary(reg_model)
+
+# Calculate PRESS
+cat("PRESS: ", PRESS(reg_model), "\n")
+
+# Calculate predicted R^2
+cat("Predicted R^2: ", pred_r_squared(reg_model), "\n")
+```
+
+## **Principal Components Regression**
+
+-   PCA is used to calculate principal components that can then be used in principal components regression. This type of regression is often used when multicollinearity exists between predictors in a data set.
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+y = train_pca$Expect_Survival
+
+# fit PCR
+pcr_model <- pcr(y ~ PC1+PC2, data=train_pca, validation="CV")
+
+summary(pcr_model)
+
+```
+
+## Repeated Cross-Validation
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+# Repeated cross-validation with 5 folds, 3 repetitions
+train_control <- trainControl(method = "repeatedcv",
+							                number = 10, repeats = 3)
+
+# training the model 
+model_cv_repeat <- train(Expect_Survival ~ ., 
+                         data = train_pca,
+                         method = "lm",
+                         trControl = train_control)
+
+
+# Print Overall Model Performance
+print(model_cv_repeat)
+
+```
+
+## Cross-Validation
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+# Cross-validation with n folds
+k_10 <- trainControl(method = "cv", number = 10)
+
+# training the model 
+model_cv <- train(Expect_Survival ~ ., 
+                  data = train_pca,
+                  method = "lm",
+                  trControl = k_10)
+
+# Print Model Performance
+print(model_cv)
+
+cv_results = model_cv$results
+
+# Calculate PRESS = (RMSE^2) * n-2
+press_values <- (cv_results$RMSE^2) * (length(train_pca$Expect_Survival) - 2)
+
+# Calculate TSS (Total Sum of Squares)
+tss <- sum((train_pca$Expect_Survival - mean(train_pca$Expect_Survival))^2)
+
+# Calculate predicted R-squared
+cv_predicted_r2 <- 1 - (press_values / tss)
+
+cat("\nPRESS:", press_values, "\n")
+cat("Predicted R^2:", cv_predicted_r2, "\n")
+```
+
+# 07 - Predictions
+
+```{r}
+# Find the index position of the target feature
+pred_target_index <- grep(target_name, 
+                     colnames(test_pca))
+```
+
+```{r}
+# Standardization of y-test set to prevent data leakage
+y_test <- test_pca[pred_target_index]
+
+# Predictions will be on the same scale for comparison
+y_test = (y_test - train_mean) / train_sd
+#y_test = scale(y_test, center = train_mean, scale = train_sd)
+
+# Predictions
+y_pred = predict(model_cv, newdata = test_pca[, -pred_target_index])
+
+```
+
+```{r}
+
+# Calculate predicted R^2
+#pred_r2 <- pred_r_squared(model_cv)
+
+# Calculate Mean Absolute Error (MAE)
+mae <- mean(abs(y_test - y_pred))
+
+# Calculate Mean Squared Error (MSE)
+mse <- mean((y_test - y_pred)^2)
+
+# Calculate Root Mean Squared Error (RMSE)
+rmse <- sqrt(mse)
+
+# Calculate R-squared (R²)
+sst <- sum((y_test - mean(y_test))^2)  # Total sum of squares
+ssr <- sum((y_pred - mean(y_test))^2)  # Regression sum of squares
+```
+
+```{r}
+# Print the evaluation metrics
+cat("Mean Absolute Error (MAE):", mae, "\n")
+cat("Mean Squared Error (MSE):", mse, "\n")
+cat("Root Mean Squared Error (RMSE):", rmse, "\n")
+#cat("Predicted R^2:", pred_r2, "\n")
+
+```
+
+```{r}
+as.data.frame(y_pred)
+#y_pred
+```
+
+```{r}
+y_test
+
+```
+
+# 08 - Training Conclusion
+
+In conclusion, this project has demonstrated the effectiveness of Principal Component Analysis (PCA) in dimension reduction with the following key points:
+
+-   PCA was able to reduce from 37 features down to just 2 principal components.
+
+-   The best score of R\^2 = 97.61% was from Multiple Linear Regression with Cross-validation.
+
+-   The predicted R\^2 = 96.84%
+
+-   The average deviation between the predicted value, and observed value for 'Expected Survival' is RMSE = 94.08.
+
+-   The model has not been exposed to unseen data with a large amount of observations to asses its robustness, and reliability.

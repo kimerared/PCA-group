@@ -2,6 +2,7 @@
 title: "EDA"
 author: "Hector Gavilanes"
 format: html
+    embed-resources: True
 editor: visual
 ---
 
@@ -60,5 +61,9 @@ library(DataExplorer)
 
 ```{r}
 create_report(train_data)
-data()
+```
+
+```{r}
+plot_correlation(train_data, type = ("all"), maxcat = 550L)
+plot_correlation(na.omit(train_data), maxcat = 5L, type = "all")
 ```

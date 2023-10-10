@@ -178,7 +178,7 @@ summary(data_pca)
 -   The values in **`data_pca$x`** are the coordinates of each observation in the new principal component space. These coordinates are the scores for each observation along each principal component.
 
 ```{r}
-# Principal Component scores
+# Principal Component scores vector
 pc_scores <- data_pca$x
 
 # Std Deviation of Components
@@ -193,9 +193,22 @@ data_pca$center
 # Scaling factor of Variables
 data_pca$scale
 
+
+# Access the loadings for the first two principal components
+loadings_first_two_components <- eigenvector[, 1:2]
+
 # Print the loadings for the first two principal components
 print("Loadings for the first two principal components:")
-print(eigenvector[, 1:2])
+print(loadings_first_two_components)
+
+# Variables that are part of the first two principal components
+variables_first_two_components <- colnames(data_pca)[
+  apply(abs(loadings_first_two_components) > 0.01, 2, any)]
+
+# Print the variables
+print("Variables that are part of the first two principal components:")
+print(variables_first_two_components)
+
 ```
 
 ## PCA - Cumulative Variance
@@ -232,11 +245,24 @@ fviz_eig(data_pca, addlabels = TRUE)
 
 ## Biplot
 
+The correlation between a variable and a principal component (PC) is used as the coordinates of the variable on the PC. The representation of variables differs from the plot of the observations: The observations are represented by their projections, but the variables are represented by their correlations (Abdi and Williams 2010).
+
 ```{r}
 fviz_pca_biplot(data_pca, 
                 geom = c("point", "arrow"),
                 geom.var = "arrow")
+
 ```
+
+## Correlation Circle
+
+The plot below is also known as variable correlation plots. It shows the relationships between all variables. It can be interpreted as follow:
+
+-   Positively correlated variables are grouped together.
+
+-   Negatively correlated variables are positioned on opposite sides of the plot origin (opposed quadrants).
+
+-   The distance between variables and the origin measures the quality of the variables on the factor map. Variables that are away from the origin are well represented on the factor map.
 
 ```{r}
 # Control variable colors using their contributions
@@ -244,6 +270,26 @@ fviz_pca_var(data_pca, col.var = "contrib",
    gradient.cols = c("white", "blue", "red"),
    geom.var = "arrow",
    ggtheme = theme_minimal())
+```
+
+## Variable Contribution
+
+Top 10 variable contribution to first two principal components.
+
+```{r}
+# Contributions of variables to PC1
+pc1_contribution <- fviz_contrib(data_pca, choice = "var", axes = 1, top = 10)
+# Modify the theme to rotate X-axis labels to 90 degrees
+# pc1_contribution + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+pc1_contribution
+
+# Contributions of variables to PC2
+pc2_contribution <- fviz_contrib(data_pca, choice = "var", axes = 2, top = 10)
+# Modify the theme to rotate X-axis labels to 90 degrees
+# pc2_contribution + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+pc2_contribution
+
+
 ```
 
 # 06 - Model Building

@@ -279,15 +279,17 @@ Top 10 variable contribution to first two principal components.
 ```{r}
 # Contributions of variables to PC1
 pc1_contribution <- fviz_contrib(data_pca, choice = "var", axes = 1, top = 10)
-# Modify the theme to rotate X-axis labels to 90 degrees
-# pc1_contribution + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 pc1_contribution
+# Modify the theme to rotate X-axis labels to 90 degrees
+pc1_contribution + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
 
 # Contributions of variables to PC2
 pc2_contribution <- fviz_contrib(data_pca, choice = "var", axes = 2, top = 10)
-# Modify the theme to rotate X-axis labels to 90 degrees
-# pc2_contribution + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 pc2_contribution
+# Modify the theme to rotate X-axis labels to 90 degrees
+pc2_contribution + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
 
 
 ```

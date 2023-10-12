@@ -141,7 +141,7 @@ boxplot(train_data_sc, main = "Boxplot of Values")
 corr_matrix <- cor(train_data_sc)
 corr_matrix <- round(corr_matrix, digits = 2)
 
-# Print names of highly correlated features
+# Print names of highly correlated features; threshold > 0.30
 high <- findCorrelation(corr_matrix, cutoff = 0.30, names = TRUE)
 high
 
@@ -274,24 +274,59 @@ fviz_pca_var(data_pca, col.var = "contrib",
 
 ## Variable Contribution
 
-Top 10 variable contribution to first two principal components.
+Top 10 variable contribution for the first two principal components.
 
 ```{r}
 # Contributions of variables to PC1
 pc1_contribution <- fviz_contrib(data_pca, choice = "var", axes = 1, top = 10)
-pc1_contribution
 # Modify the theme to rotate X-axis labels to 90 degrees
-pc1_contribution + theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
+pc1_contribution + theme(
+  axis.text.x = element_text(angle = 0),
+  axis.text.y = element_text(angle = 0),
+  plot.title = element_text(hjust = -4)# horizontal justification
+  )+ coord_flip()+
+  labs(title = "Contribution of Variables to PC1",
+       caption = "(Percentage Contribution)")+
+  xlab("")+
+  ylab("Percentage")+
+  scale_y_continuous(labels = scales::percent_format(scale = 10, accuracy = 1))
 
 # Contributions of variables to PC2
 pc2_contribution <- fviz_contrib(data_pca, choice = "var", axes = 2, top = 10)
-pc2_contribution
 # Modify the theme to rotate X-axis labels to 90 degrees
-pc2_contribution + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+pc2_contribution + theme(
+  axis.text.x = element_text(angle = 0),
+  axis.text.y = element_text(angle = 0),
+  plot.title = element_text(hjust = 7)# horizontal justification
+  )+ coord_flip()+
+  labs(title = "Contribution of Variables to PC2",
+       x = "Percentage Contribution",
+       y = "Variables Considered",
+       caption = "(Percentage Contribution)")+
+  xlab("Variables Considered")+
+  ylab("Percentage")+
+  scale_y_continuous(labels = scales::percent_format(scale = 1, accuracy = 1))
 
+```
 
+```{r}
+# Contributions of variables to PC2
+pc2_contribution <- fviz_contrib(data_pca, choice = "var", axes = 2, top = 10)
 
+# Modify the theme to rotate X-axis labels to 90 degrees
+pc2_contribution +
+  theme(
+    axis.text.x = element_text(angle = 0),
+    plot.title = element_text(hjust = 0)  # horizontal justification
+  ) +
+  coord_flip() +
+  labs(title = "Contribution of Variables to PC2",
+       y = "Percentage Contribution",
+       x = "",
+       caption = "") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1,
+                                                     accuracy = 1)) +
+  scale_x_discrete(labels = c("Phosphorus > 7.0 Mg", "Phosphorus (3.5 - 4.5 Mg)", "Phosphorus < 3.5 Mg", "Phosphorus (5.6 - 7 Mg)", "Phosphorus (4.6 - 5.5 Mg)", "Worse Transplant Waitlist", "Fistula rate (B)", "Hgb 12 g", "Better Transplant Waitlist", "Better Survival"))
 ```
 
 # 06 - Model Building

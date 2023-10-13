@@ -58,8 +58,6 @@ train_original <- read.csv('../dataset/DFC_STATE.csv')
 # Make a working copy
 train_data <- train_original
 
-tail(train_data)
-
 # Constant seed
 my_seed = 95
 ```
@@ -168,13 +166,13 @@ train_data_sc <- scale(train_data[, -target_index])
 
 # 03 - PCA Analysis
 
-## Outliers
+## Outliers Detection
 
 -   There are no outliers in the data frame.
 
 ```{r}
 # Plot a boxplot to visualize potential outliers
-boxplot(train_data_sc, main = "Boxplot of Values")
+boxplot(train_data_sc, main = "Outliers Detection")
 ```
 
 ## Correlations
@@ -214,7 +212,7 @@ summary(full_model)
 
 ```{r}
 # Apply PCA using prcomp()
-data_pca <- prcomp(train_data_sc)
+data_pca <- prcomp(train_data_sc, center = TRUE, scale. = TRUE)
 summary(data_pca)
 ```
 
@@ -373,7 +371,7 @@ pc2_contribution +
 # reproducible random sampling
 set.seed(my_seed)  
  
-# Create Target y-variable 
+# Create Target y-variable for the training set
 y <- train_data$expected_survival  
 # Split the data into training and test sets 
 split <- sample.split(y, SplitRatio = 0.7) 
@@ -381,22 +379,23 @@ training_set <- subset(train_data, split == TRUE)
 test_set <- subset(train_data, split == FALSE) 
 ```
 
-## Standardization
+## Feature Scaling: Standardization
 
 -   It is important to Mean-Center the data prior to PCA model building to ensure the first Principal Component is in the direction of maximum variance.
 
 -   Standardization produces Mean = 0, and Variance = 1.
 
 ```{r}
-train_mean <- mean(unlist(training_set[, -target_index]))
-train_sd <- sd(unlist(training_set[, -target_index]))
+# Feature Scaling: Standardization
+# Perform centering and scaling on the training and test sets
+sc <- preProcess(training_set[, -target_index], 
+                 method = c("center", "scale"))
+training_set[, -target_index] <- predict(
+  sc, training_set[, -target_index])
+test_set[, -target_index] <- predict(sc, test_set[, -target_index])
 
-# Standardization
-training_set[,-target_index] = scale(training_set[, -target_index])
-test_set[,-target_index] = scale(test_set[, -target_index])
-
-# training_set[,-target_index] = scale(training_set)
-# test_set[,-target_index] = scale(test_set)
+# training_set[,-target_index] = scale(training_set[, -target_index])
+# test_set[,-target_index] = scale(test_set[, -target_index])
 
 ```
 
@@ -468,9 +467,6 @@ cat("Predicted R^2: ", pred_r_squared(pca_full_model), "\n")
 ### Visualization of Uncorrelated PCA Matrix
 
 ```{r}
-# replacing response feature name
-# colnames(training_set)[which(names(training_set) == target_name)] <- "Expected_Survival"
-
 # Visual of Principal Components un-correlation
 corr_matrix <- cor(training_set)
 ggcorrplot(corr_matrix)
@@ -562,17 +558,6 @@ print(model_cv)
 
 cv_results = model_cv$results
 
-# Calculate PRESS = (RMSE^2) * n-2
-press_values <- (cv_results$RMSE^2) * (length(train_pca$Expect_Survival) - 2)
-
-# Calculate TSS (Total Sum of Squares)
-tss <- sum((train_pca$Expect_Survival - mean(train_pca$Expect_Survival))^2)
-
-# Calculate predicted R-squared
-cv_predicted_r2 <- 1 - (press_values / tss)
-
-cat("\nPRESS:", press_values, "\n")
-cat("Predicted R^2:", cv_predicted_r2, "\n")
 ```
 
 # 07 - Predictions
@@ -581,56 +566,52 @@ cat("Predicted R^2:", cv_predicted_r2, "\n")
 # Find the index position of the target feature
 pred_target_index <- grep(target_name, 
                      colnames(test_pca))
+cat("Target Feature Index =", pred_target_index)
+
+# Create Predicted Target Feature (y-test) 
+y_test <- test_pca[pred_target_index]
 ```
 
 ```{r}
-# Standardization of y-test set to prevent data leakage
-y_test <- test_pca[pred_target_index]
-
-# Predictions will be on the same scale for comparison
-y_test = (y_test - train_mean) / train_sd
-#y_test = scale(y_test, center = train_mean, scale = train_sd)
-
-# Predictions
+# Predictions using the Cross-Validation model
 y_pred = predict(model_cv, newdata = test_pca[, -pred_target_index])
 
 ```
 
 ```{r}
+# Prediction Results from y_predictions
+round(y_pred, digits = 0)
 
-# Calculate predicted R^2
-#pred_r2 <- pred_r_squared(model_cv)
+```
 
+```{r}
+# Transform y_test from data frame to numeric
+y_test_numeric <- as.numeric(unlist(y_test))
+
+# Original data
+y_test_numeric
+
+```
+
+## Prediction Metrics
+
+```{r}
 # Calculate Mean Absolute Error (MAE)
-mae <- mean(abs(y_test - y_pred))
+mae_value <- mae(y_pred, y_test_numeric)
+cat("MAE =", mae_value)
 
-# Calculate Mean Squared Error (MSE)
-mse <- mean((y_test - y_pred)^2)
+# Calculate MSE
+mse_predict <- mean((y_pred - y_test_numeric)^2)
+cat("\nMSE =", mse_predict)
 
-# Calculate Root Mean Squared Error (RMSE)
-rmse <- sqrt(mse)
+# Calculate RMSE
+rmse_predict <- sqrt(mean((y_pred - y_test_numeric)^2))
+cat("\nRMSE =", rmse_predict)
 
-# Calculate R-squared (R²)
-sst <- sum((y_test - mean(y_test))^2)  # Total sum of squares
-ssr <- sum((y_pred - mean(y_test))^2)  # Regression sum of squares
-```
-
-```{r}
-# Print the evaluation metrics
-cat("Mean Absolute Error (MAE):", mae, "\n")
-cat("Mean Squared Error (MSE):", mse, "\n")
-cat("Root Mean Squared Error (RMSE):", rmse, "\n")
-#cat("Predicted R^2:", pred_r2, "\n")
-
-```
-
-```{r}
-as.data.frame(y_pred)
-#y_pred
-```
-
-```{r}
-y_test
+# Calculate R-squared (R^2)
+predicted_r2 <- 1 - sum((y_test_numeric - y_pred)^2) / 
+  sum((y_test_numeric - mean(y_test_numeric))^2)
+cat("\nPredicted R^2 =", predicted_r2)
 
 ```
 
@@ -640,10 +621,10 @@ In conclusion, this project has demonstrated the effectiveness of Principal Comp
 
 -   PCA was able to reduce from 37 features down to just 2 principal components.
 
--   The best score of R\^2 = 97.61% was from Multiple Linear Regression with Cross-validation.
+-   The best score of R\^2 = 97.61% was from the Linear Regression with Cross-validation model.
 
--   The predicted R\^2 = 96.84%
+-   The predicted R\^2 = 96%
 
--   The average deviation between the predicted value, and observed value for 'Expected Survival' is RMSE = 94.08.
+-   The average deviation between the predicted values, and observed values for 'Expected Survival' is RMSE = 33.77.
 
 -   The model has not been exposed to unseen data with a large amount of observations to asses its robustness, and reliability.

@@ -1,0 +1,96 @@
+---
+title: "EDA"
+author: "Hector Gavilanes"
+format: html
+    embed-resources: True
+editor: visual
+---
+
+## Load Libraries
+
+```{r setup, echo=FALSE}
+# Install libraries if needed
+#install.packages("explore")
+# install.packages("tidyverse")
+# install.packages("shiny")
+```
+
+```{r, warnings = FALSE, message = FALSE}
+# Load necessary libraries
+library(tidyverse)
+library(explore)
+library(shiny)
+```
+
+## Load Data
+
+```{r}
+# clear environment
+rm(list = ls())
+
+# Load dataset
+train_original <- read.csv('../../dataset/DFC_STATE.csv')
+
+# Make a working copy
+train_data <- train_original
+```
+
+## EDA
+
+```{r}
+#train_data %>% explore()
+```
+
+Report
+
+```{r}
+# train_data %>% 
+#   report(
+#     target = Survival..As.Expected..STATE.,
+#     output_dir = "report/",
+#     output_file = "eda_report.html" 
+#   )
+```
+
+## Data Explorer
+
+```{r}
+# install.packages("DataExplorer")
+library(DataExplorer)
+```
+
+```{r}
+str(train_data)
+# create_report(train_data)
+```
+
+```{r}
+plot_intro(train_data)
+
+
+```
+
+```{r}
+plot_missing(train_data)
+```
+
+```{r}
+#visualize of data in histograms
+plot_histogram(train_data)
+
+```
+
+```{r}
+#View bivariate continuous distribution
+plot_boxplot(train_data, by = "Survival..As.Expected..STATE.",
+             ncol = 3L)
+
+```
+
+```{r}
+
+# Calculate correlations and round to 2 digits
+corr_matrix <- cor(train_data[, 1:38], method = "spearman")
+corr_matrix <- round(corr_matrix, digits = 2)
+corr_matrix
+```

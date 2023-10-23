@@ -210,7 +210,7 @@ plot_boxplot(train_data[, 18:30], by = "expected_survival",
 
 ## Data Transformation
 
-Kurtosis was used to mitigate the outliers. Kurtosis is a statistical measure used to describe the shape of a distribution. Moreover, kurtosis measures the "tailedness" of a distribution, and it describes how heavily the tails of a distribution differ from the tails of a normal distribution. Excess kurtosis is a metric that compares the kurtosis of a distribution against the kurtosis of a normal distribution. The kurtosis of a normal distribution equals 3.
+Kurtosis was used to mitigate the outliers. Kurtosis is a statistical measure used to describe the shape of a distribution. Moreover, kurtosis measures the tail distribution, and it describes how heavily differ from a normal distribution. Excess kurtosis is a metric that compares the kurtosis of a distribution against the kurtosis of a normal distribution. The kurtosis of a normal distribution equals 3.
 
 ```{r}
 # Apply the N-scores transformation to train_data
@@ -306,8 +306,7 @@ summary(boxcox_model)
 
 ```{r}
 # Apply Robust Scaler to the dataset
-robustSc_data <- RobScale(transformed_data,
-                          center = TRUE, scale = TRUE)
+robustSc_data <- scale(transformed_data)
 ```
 
 ```{r}

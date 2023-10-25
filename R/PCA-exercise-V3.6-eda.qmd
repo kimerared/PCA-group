@@ -125,7 +125,7 @@ train_data <- rename(train_data,
 
 ```{r}
 plot_intro(train_data)
-plot_missing(train_data)
+plot_missing(train_data, missing_only = TRUE)
 ```
 
 ## Data Distribution
@@ -237,7 +237,7 @@ qqnorm(transformed_data$expected_survival,
        ylab="Sample Quantiles (QQ) for Expected Survival")
 qqline(transformed_data$expected_survival, col="magenta")
 
-# transformed N scores
+# transformed Normal scores
 boxplot(transformed_data$expected_survival)
 ```
 

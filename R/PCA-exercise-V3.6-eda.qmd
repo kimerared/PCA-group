@@ -31,6 +31,7 @@ execute:
 # install.packages("psych")
 # install.packages("rcompanion")
 # install.packages("robustbase")
+install.packages("rrcov")
 ```
 
 ```{r, warnings = FALSE, message = FALSE}
@@ -53,6 +54,7 @@ library(ggplot2)      # graphics
 library(car)          # for outliers test, power transformation
 library(MASS)         # power transformation, robust model
 library(DescTools)    # robust scaler
+library(rrcov)
 # library(EnvStats) # for rosnerTest
 # library(corrr)      # correlation matrix
 # library(FactoMineR) # PCA analysis

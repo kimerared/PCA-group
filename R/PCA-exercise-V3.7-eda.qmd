@@ -1,0 +1,830 @@
+---
+title: "PCA - Multiple Linear Regression"
+author: "Hector Gavilanes"
+format: html
+editor: visual
+self-contained: true
+execute: 
+  warning: false
+  message: false
+---
+
+## Libraries
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+# Install libraries if needed
+# install.packages("caret")
+# install.packages("corrplot")
+# install.packages("Metrics")
+# install.packages("caTools")
+# install.packages("EnvStats")
+# install.packages("car")
+# install.packages("corrr")
+# install.packages("ggcorrplot")
+# install.packages("FactoMineR")
+# install.packages("factoextra")
+# install.packages("pls")
+# install.packages("e1071")
+# install.packages("plotly")
+# install.packages("reshape2")
+# install.packages("sparklyr")
+# install.packages("psych")
+# install.packages("rcompanion")
+# install.packages("robustbase")
+# install.packages("kableExtra")
+# install.packages("rrcov")
+```
+
+```{r, warnings = FALSE, message = FALSE}
+# Load libraries
+library(tidyverse)    
+library(caTools)
+library(caret)
+library(corrplot)     # plot correlation matrix
+library(Metrics)      # calculate MAE, MSE, RMSE, R^2
+library(pls)          # PC regression
+library(e1071)        # to fit transform PCA  
+library(reshape2)     # transform to matrix
+library(ggcorrplot)   # correlation graph
+library(factoextra)   # PCA plots
+library(psych)        # descriptive stats - skew, kurtosis
+library(rcompanion)   # histogram plot
+library(DataExplorer) # EDA
+library(ggplot2)      # graphics
+library(car)          # for outliers test, power transformation
+library(MASS)         # power transformation, robust model
+library(DescTools)    # robust scaler
+library(rrcov)
+#library(robustbase)   # robust scaler
+```
+
+# 01 - Data Preparation
+
+```{r}
+# clear environment
+rm(list = ls())
+
+# Load dataset
+train_original <- read.csv('../dataset/DFC_STATE.csv')
+
+# Make a working copy
+train_data <- train_original
+
+# Constant seed
+my_seed = 95
+```
+
+## Rename Variables
+
+```{r}
+train_data <- rename(train_data,
+        better_transfusion = Transfusions..Better.than.expected..STATE.,
+        expected_transfusion = Transfusions..As.expected..STATE.,
+        worse_transfusion = Transfusions..Worse.than.expected..STATE.,
+        better_infection = Infection..Better.than.expected..STATE.,
+        expected_infection = Infection..As.expected..STATE.,
+        worse_infection = Infection..Worse.than.expected..STATE.,
+        Kt_v_1.2 = Percentage.of.adult.HD.patients.with.Kt.V..1.2,
+        Kt_v_1.7 = Percentage.Of.Adult.PD.Patients.With.Kt.V..1.7,
+        pedriatic_Kt_v_1.2 = Percentage.Of.Pediatric.HD.Patients.With.Kt.V..1.2,
+        pediatric_Kt_v_1.8 = Percentage.Of.Pediatric.PD.Patients.With.Kt.V..1.8,
+        pediatric_nPCR = Percentage.Of.Pediatric.HD.Patients.With.nPCR.In.Use,
+        better_fistula = Fistula.Rate...Better.Than.Expected..STATE.,
+        expected_fistula = Fistula.Rate...As.Expected..STATE.,
+        worse_fistula = Fistula.Rate...Worse.Than.Expected..STATE.,
+        long_term_catheter = Percentage.Of.Adult.Patients.With.Long.Term.Catheter.In.Use ,
+        "hypercalcemia_calcium > 10.2Mg" = Percentage.Of.Adult.Patients.With.Hypercalcemia..Serum.Calcium.Greater.Than.10.2.Mg.dL.,
+        "phosphorus < 3.5Mg" = Percentage.Of.Adult.Patients.With.Serum.Phosphorus.Less.Than.3.5.Mg.dL,
+        "phosphorus (3.5 - 4.5) Mg" = Percentage.Of.Adult.Patients.With.Serum.Phosphorus.Between.3.5.4.5.Mg.dL,
+        "phosphorus (4.6 - 5.5) Mg" = Percentage.Of.Adult.Patients.With.Serum.Phosphorus.Between.4.6.5.5.Mg.dL,
+        "phosphorus (5.6 - 7) Mg" = Percentage.Of.Adult.Patients.With.Serum.Phosphorus.Between.5.6.7.0.Mg.dL,
+        "phosphorus > 7Mg" = Percentage.Of.Adult.Patients.With.Serum.Phosphorus.Greater.Than.7.0.Mg.dL,
+        better_hospitalization = Hospitalizations..Better.Than.Expected..STATE.,
+        expected_hospitalization = Hospitalizations..As.Expected..STATE.,
+        worse_hospitalization = Hospitalizations..Worse.Than.Expected..STATE.,
+        better_hospital_readmission = Hospital.Readmission...Better.Than.Expected..STATE.,
+        expected_hospital_readmission = Hospital.Readmission...As.Expected..STATE.,
+        worse_hospital_readmission = Hospital..Readmission...Worse.Than.Expected..STATE.,
+        better_survival = Survival..Better.Than.Expected..STATE.,
+        expected_survival = Survival..As.Expected..STATE.,
+        worse_survival = Survival..Worse.Than.Expected..STATE.,
+        incident_transplant_waitlist_better = Incident.Patients.Transplant.Waitlisting..Better.Than.Expected..STATE.,
+        incident_transplant_waitlist_expected = Incident.Patients.Transplant.Waitlisting...As.Expected..STATE.,
+        incident_transplant_waitlist_worse = Incident.Patients.Transplant.Waitlisting...Worse.Than.Expected..STATE.,
+        prevalent_transplant_waitlist_better = Prevalent.Patients.Transplant.Waitlisting..Better.Than.Expected..STATE.,
+        prevalent_transplant_waitlist_expected = Prevalent.Patients.Transplant.Waitlisting...As.Expected..STATE.,
+        prevalent_transplant_waitlist_worse = Prevalent.Patients.Transplant.Waitlisting...Worse.Than.Expected..STATE.,
+        Hgb_10g = Percentage.Of.Patients.With.Hgb.10.g.dL,
+        Hgb_12g = Percentage.of.patients.with.Hgb.12.g.dL
+        )
+```
+
+## Missing Values Detection
+
+```{r}
+plot_intro(train_data)
+plot_missing(train_data, missing_only = TRUE)
+```
+
+## Data Distribution
+
+-   Histograms were used to display a sample (8 variables) of the distribution in respect to the predictor variable.
+
+-   Normality is not assumed. The majority of the observations in each variable do not meet the normality assumption.
+
+```{r}
+#visualize of data in histograms
+plot_histogram(train_data[, 18:25], ncol = 2L)
+```
+
+## Normal QQ Plot of Residuals
+
+-   It is apparent that the variables have heavy left and right tails.
+
+-   The presence of outliers is consistent though the entire dataset.
+
+```{r}
+plot_qq(train_data[, 19:30], ncol = 2L)
+```
+
+## Impute Missing Values
+
+-   Replace missing values with the median since there are outliers in the dataset.
+-   Robust statistical methods will be used to address the nonparametric distribution.
+
+```{r}
+# Count the number of missing values in each column
+colSums(is.na(train_data))
+
+# Remove categorical columns
+train_data$State <- NULL
+
+# Impute missing values with the mean
+for (col in colnames(train_data)) {
+  median_value <- median(train_data[[col]], na.rm = TRUE)
+  train_data[[col]] <- ifelse(is.na(train_data[[col]]), median_value,     train_data[[col]])
+}
+
+```
+
+```{r}
+# Remove rows with missing values
+train_data <- na.omit(train_data)
+
+# Count the number of missing values in each column
+colSums(is.na(train_data))
+
+# Get duplicated rows
+train_data[duplicated(train_data), ]
+
+# Round all variables
+train_data <- round(train_data, digits = 0)
+
+# Summary statistics of the data
+describe(train_data)
+
+```
+
+```{r}
+# Check dataset structure
+str(train_data)
+```
+
+# 02 - PCA Requirement Analysis
+
+## Outliers Detection
+
+-   There multiple outliers in the data frame.
+-   Further data transformation will be applied to the dataset.
+
+```{r}
+# Plot a boxplot to visualize potential outliers
+boxplot(train_data, main = "Outliers Detection", col = "magenta")
+
+#View bivariate continuous distribution
+plot_boxplot(train_data[, 18:30], by = "expected_survival",
+             ncol = 4L, geom_boxplot_args = list(outlier.color = "magenta"))
+```
+
+## Data Transformation
+
+Kurtosis was used to mitigate the outliers. Kurtosis is a statistical measure used to describe the shape of a distribution. Moreover, kurtosis measures the tail distribution, and it describes how heavily differ from a normal distribution. Excess kurtosis is a metric that compares the kurtosis of a distribution against the kurtosis of a normal distribution. The kurtosis of a normal distribution equals 3.
+
+```{r}
+# Apply the N-scores transformation to train_data
+transformed_data <- train_data
+
+# Specify the columns you want to transform (e.g., columns 18 to 25)
+columns_to_transform <- 1:38
+
+# Loop through the selected columns and apply the N-Scores transformation
+for (col in columns_to_transform) {
+  transformed_data[, col] <- blom(train_data[, col])
+}
+
+# Rename the columns for clarity
+colnames(transformed_data) <- colnames(train_data)
+
+```
+
+```{r}
+plotNormalHistogram(transformed_data$expected_survival)
+
+# QQ plot
+qqnorm(transformed_data$expected_survival,
+       ylab="Sample Quantiles (QQ) for Expected Survival")
+qqline(transformed_data$expected_survival, col="magenta")
+
+# transformed N scores
+boxplot(transformed_data$expected_survival)
+```
+
+```{r}
+plot_qq(transformed_data[, 19:30], ncol = 4L)
+```
+
+```{r}
+boxplot(transformed_data)
+
+```
+
+```{r}
+# Outliers in variables: 1,7,15,16,17,20,38
+# Power Transform
+m = lm(expected_survival ~ ., data = transformed_data)
+powerTransform(m, family = "yjPower")
+```
+
+## Feature Scaling
+
+-   Robust Standardization ensures all features are on the same scale, and this method is less sensitive to outliers.
+-   On the other hand, Standardization is useful when the data is normally distributed.
+-   Robust scaling is applied with centering and scaling equal to "FALSE", since the data has already been transformed to Normal Z-scores using Normal-scores.
+-   The median and median absolute deviation are applied.
+
+```{r}
+# Apply Robust Scaler to the dataset
+robustSc_data <- scale(transformed_data)
+```
+
+```{r}
+# # Robust Scaling Numerical Features
+# robust_scaled_data <- scale(transformed_data, center = TRUE, scale = TRUE)
+# 
+# # Verify class type
+# class(robust_scaled_data)
+# 
+# # Transform matrix to data frame
+# robust_scaled_df <- as.data.frame(robust_scaled_data)
+```
+
+```{r}
+boxplot(robustSc_data)
+
+```
+
+## Correlations
+
+-   There are high correlated features.
+
+-   Multicollinearity is present in the data set.
+
+-   The Spearman method was used because the features are not normally distributed.
+
+-   Spearman correlation coefficient is less sensitive to outliers.
+
+```{r}
+# Calculate correlations and round to 2 digits
+corr_matrix <- cor(robustSc_data, method = "spearman")
+corr_matrix <- round(corr_matrix, digits = 2)
+
+# Print names of highly correlated features; threshold > 0.30
+high <- findCorrelation(corr_matrix, cutoff = 0.30, names = TRUE)
+as.data.frame(high)
+
+```
+
+```{r}
+# Calculate correlation table
+corr_table<- function(df){
+  # Correlation 
+  corr <- cor(df)
+  # Prepare to drop duplicates and correlations of 1     
+  corr[lower.tri(corr,diag=TRUE)] <- NA 
+  # Drop perfect correlations
+  corr[corr == 1] <- NA
+  
+  # Turn into a 3-column table
+  corr <- as.data.frame(as.table(corr))
+  # Remove the NA values from above 
+  corr <- na.omit(corr) 
+  
+  # Select significant values
+  sig=0.5
+  corr <- subset(corr, abs(Freq) > sig) 
+  # Sort by highest correlation
+  corr <- corr[order(-abs(corr$Freq)),] 
+  
+}
+correlation_table <- corr_table(robustSc_data)
+correlation_table
+```
+
+```{r}
+# Transform correlation table back into matrix form
+  mtx_corr <- reshape2::acast(correlation_table, 
+                              Var1~Var2, value.var="Freq")
+  
+# Plot significant correlations
+  corrplot::corrplot(mtx_corr, is.corr=FALSE, 
+                     tl.col="black", na.label=" ",
+                     tl.cex = 0.55,
+                     method = "square",
+                     tl.pos = "n"
+                     )
+```
+
+# 03 - Full Model Regression
+
+-   The Adjusted R\^2 = 99.99% is an indication of over-fitting, or bias.
+
+## Target Feature
+
+```{r}
+# Find the index position of the target feature 
+target_name <- "expected_survival"
+target_index <- grep(target_name, 
+                     colnames(robustSc_data))
+```
+
+```{r}
+set.seed(my_seed)
+# robust_full_model <- lmrob(expected_survival ~ ., data = robust_scaled_df, setting = "KS2014") 
+# summary(robust_full_model)
+
+# Fit a robust regression model
+robust_model <- rlm(expected_survival ~ ., data = robustSc_data)
+
+# Print the model summary
+summary(robust_model)
+
+```
+
+```{r}
+set.seed(my_seed)
+
+# Fit a multiple linear regression model
+full_model <- lm(expected_survival ~ ., data = robustSc_data)
+
+# Print a summary of the regression model
+summary(full_model)
+```
+
+# 04 - SVD - Singular Value Decomposition
+
+-   Note: The Spectral Decomposition approach is used with the princomp() function.
+
+```{r}
+# Robust PCA
+robust_pca_data <- PcaHubert(scaled_trans_data, k=0, 
+                             kmax=10, skew=TRUE, alpha=0.75)
+
+robust_pca_data
+
+## If you want to print the scores too, use
+    print(robust_pca_data, print.x=TRUE)
+
+## Using the formula interface
+    # PcaHubert(~., data=hbk)
+
+## To plot the results:
+
+    plot(robust_pca_data)                    # distance plot
+    pca2 <- PcaHubert(scaled_trans_data, k=2)  
+    plot(pca2)                   # PCA diagnostic plot (or outlier map)
+    
+## Use the standard plots available for prcomp and princomp
+    screeplot(robust_pca_data)    
+    biplot(robust_pca_data)    
+    
+## Restore the covraiance matrix     
+    py <- PcaHubert(scaled_trans_data)
+    cov.1 <- py@loadings %*% diag(py@eigenvalues) %*% t(py@loadings)
+    cov.1    
+```
+
+```{r}
+# Apply classical PCA using prcomp()
+data_pca <- prcomp(scaled_trans_data, center = TRUE, scale. = TRUE)
+summary(data_pca)
+```
+
+## PCA - Elements
+
+-   The values in **`data_pca$x`** are the coordinates of each observation in the new principal component space. These coordinates are the scores for each observation along each principal component.
+
+-   The eigenvectors of the covariance or correlation matrix of the data represent the directions of maximum variance or information in the dataset.
+
+```{r}
+# Principal Component scores vector
+pc_scores <- data_pca$x
+
+# Std Deviation of Components
+component_sdev <- data_pca$sdev
+
+# Eigenvector, or Loadings
+eigenvector <- data_pca$rotation
+
+# Mean of variables
+component_mean <- data_pca$center 
+
+# Scaling factor of Variables
+component_scale <- data_pca$scale
+
+```
+
+## Loading of First Two Components
+
+-   The loading are the weights assigned to each variable for that particular principal component.
+
+```{r}
+# Access the loadings for the first two principal components
+loadings_first_two_components <- eigenvector[, 1:2]
+
+# Print the loadings for the first two principal components
+print("Loadings for the first two principal components:")
+print(loadings_first_two_components)
+```
+
+## PCA - Cumulative Variance
+
+```{r}
+# Proportion of variance explained by each PC
+variance_explained <- component_sdev^2 / sum(component_sdev^2)
+
+# Cumulative proportion of variance explained
+cumulative_variance_explained <- cumsum(variance_explained)
+cumulative_variance_explained
+```
+
+## PCA - Number of Principal Components
+
+-   We conclude that 9 Principal Components explain 86% of the variance.
+
+```{r}
+# Retain components that explain a percentage of the variance
+num_components <- which(cumulative_variance_explained >= 0.86)[1]
+
+# Select the desired number of principal components
+selected_pcs <- pc_scores[, 1:num_components]
+selected_pcs
+```
+
+# 05 - Visualization
+
+## Scree Plot - Cumulative Variance Explained
+
+-   PC1 explains 31.1% variance.
+
+-   PC2 explains 14.3% variance.
+
+```{r}
+fviz_eig(data_pca, addlabels = TRUE)
+```
+
+## Biplot
+
+The correlation between a variable and a principal component (PC) is used as the coordinates of the variable on the PC. The representation of variables differs from the plot of the observations: The observations are represented by their projections, but the variables are represented by their correlations (Abdi and Williams 2010).
+
+-   PC1 is represented in black which displays the longest distance of its projection.
+
+-   PC2 is represented in blue which displays a shorter distance as expected.
+
+```{r}
+fviz_pca_biplot(data_pca, 
+                geom = c("point", "arrow"),
+                geom.var = "arrow")
+
+```
+
+## Correlation Circle
+
+The plot below is also known as variable correlation plots. It shows the relationships between all variables. It can be interpreted as follow:
+
+-   Positively correlated variables are grouped together.
+
+-   Negatively correlated variables are positioned on opposite sides of the plot origin (opposed quadrants).
+
+-   The distance between variables and the origin measures the quality of the variables on the factor map. Variables that are away from the origin are well represented on the factor map.
+
+```{r}
+# Control variable colors using their contributions
+fviz_pca_var(data_pca, col.var = "contrib",
+   gradient.cols = c("white", "blue", "red"),
+   geom.var = "arrow",
+   ggtheme = theme_minimal())
+```
+
+## Variable Contribution
+
+Top variable contribution for the first two principal components.
+
+```{r}
+# Contributions of variables to PC1
+pc2_contribution <- fviz_contrib(data_pca, choice = "var", axes = 1, top = 15)
+
+# Modify the theme to rotate X-axis labels to 90 degrees
+pc2_contribution +
+  theme(
+    axis.text.x = element_text(angle = 0),
+    plot.title = element_text(hjust = 0)  # horizontal justification
+  ) +
+  coord_flip() +
+  labs(title = "Contribution of Variables to PC1",
+       y = "Percentage Contribution",
+       x = "",
+       caption = "PC1 explains 31.1% variance") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1,
+                                                     accuracy = 1))
+
+
+# Contributions of variables to PC2
+pc2_contribution <- fviz_contrib(data_pca, choice = "var", axes = 2, top = 12)
+
+# Modify the theme to rotate X-axis labels to 90 degrees
+pc2_contribution +
+  theme(
+    axis.text.x = element_text(angle = 0),
+    plot.title = element_text(hjust = 0)  # horizontal justification
+  ) +
+  coord_flip() +
+  labs(title = "Contribution of Variables to PC2",
+       y = "Percentage Contribution",
+       x = "",
+       caption = "PC2 explains 14.3% variance") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1,
+                                                     accuracy = 1))
+```
+
+# 06 - Model Building
+
+## Data Splitting into Training & Test set
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)  
+ 
+# Create Target y-variable for the training set
+y <- train_data$expected_survival  
+# Split the data into training and test sets 
+split <- sample.split(y, SplitRatio = 0.7) 
+training_set <- subset(train_data, split == TRUE) 
+test_set <- subset(train_data, split == FALSE) 
+```
+
+## Feature Scaling: Standardization
+
+-   It is important to Mean-Center the data prior to PCA model building to ensure the first Principal Component is in the direction of maximum variance.
+
+-   Standardization produces Mean = 0, and Variance = 1.
+
+```{r}
+# Feature Scaling: Standardization
+# Perform centering and scaling on the training and test sets
+sc <- preProcess(training_set[, -target_index], 
+                 method = c("center", "scale"))
+training_set[, -target_index] <- predict(
+  sc, training_set[, -target_index])
+test_set[, -target_index] <- predict(sc, test_set[, -target_index])
+
+```
+
+## Applying PCA to Training & Test sets
+
+```{r}
+# Perform Principal Component Analysis (PCA) preprocessing on the training data
+pca <- preProcess(training_set[, -target_index], 
+                  method = 'pca', pcaComp = 8)
+
+# Apply PCA transformation to original training set
+training_set <- predict(pca, training_set)
+
+# Reorder columns, moving the dependent feature index to the end
+training_set <- training_set[c(2:9, 1)]
+
+# Apply PCA transformation to original test set
+test_set <- predict(pca, test_set)
+
+# Reorder columns, moving the dependent feature index to the end
+test_set <- test_set[c(2:9, 1)]
+
+```
+
+## PRESS & Predicted R\^2 Functions
+
+```{r}
+#PRESS - predicted residual sums of squares
+PRESS <- function(linear.model) {
+  # calculate the predictive residuals
+  pr <- residuals(linear.model)/(1-lm.influence(linear.model)$hat)
+  # calculate the PRESS
+  PRESS <- sum(pr^2)
+  
+  return(PRESS)
+}
+
+pred_r_squared <- function(linear.model) {
+  # Use anova() to get the sum of squares for the linear model
+  lm.anova <- anova(linear.model)
+  # Calculate the total sum of squares
+  tss <- sum(lm.anova$'Sum Sq')
+  # Calculate the predictive R^2
+  pred.r.squared <- 1-PRESS(linear.model)/(tss)
+  
+  return(pred.r.squared)
+}
+```
+
+## PCA Full Model - 8 Principal Components
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+# Fit a multiple linear regression model
+pca_full_model <- lm(expected_survival ~ ., data = training_set)
+
+# Print a summary of the regression model
+summary(pca_full_model)
+
+# Calculate PRESS
+cat("PRESS: ", PRESS(pca_full_model), "\n")
+
+# Calculate predicted R^2
+cat("Predicted R^2: ", pred_r_squared(pca_full_model), "\n")
+```
+
+### Visualization of Uncorrelated PCA Matrix
+
+```{r}
+# Visual of Principal Components un-correlation
+corr_matrix <- cor(training_set)
+ggcorrplot(corr_matrix)
+```
+
+## PCA - 2 Principal Components
+
+```{r}
+# Create a subset with 2 principal components
+significant_pcs = c(1,2,9)
+train_pca <- training_set[, significant_pcs]
+test_pca <- test_set[, significant_pcs]
+```
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+# Fit a multiple linear regression model
+reg_model <- lm(expected_survival ~ ., 
+                data = train_pca)
+
+# Print a summary of the regression model
+summary(reg_model)
+
+# Calculate PRESS
+cat("PRESS: ", PRESS(reg_model), "\n")
+
+# Calculate predicted R^2
+cat("Predicted R^2: ", pred_r_squared(reg_model), "\n")
+```
+
+## **Principal Components Regression**
+
+-   PCA is used to calculate principal components that can then be used in principal components regression. This type of regression is often used when multicollinearity exists between predictors in a data set.
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+y = train_pca$expected_survival
+
+# fit PCR
+pcr_model <- pcr(y ~ PC1+PC2, data=train_pca, validation="CV")
+
+summary(pcr_model)
+
+```
+
+## Repeated Cross-Validation
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+# Repeated cross-validation with 5 folds, 3 repetitions
+train_control <- trainControl(method = "repeatedcv",
+							                number = 10, repeats = 3)
+
+# training the model 
+model_cv_repeat <- train(expected_survival ~ ., 
+                         data = train_pca,
+                         method = "lm",
+                         trControl = train_control)
+
+
+# Print Overall Model Performance
+print(model_cv_repeat)
+
+```
+
+## Cross-Validation
+
+```{r}
+# reproducible random sampling
+set.seed(my_seed)
+
+# Cross-validation with n folds
+k_10 <- trainControl(method = "cv", number = 10)
+
+# training the model 
+model_cv <- train(expected_survival ~ ., 
+                  data = train_pca,
+                  method = "lm",
+                  trControl = k_10)
+
+# Print Model Performance
+print(model_cv)
+
+cv_results = model_cv$results
+
+```
+
+# 07 - Predictions
+
+```{r}
+# Find the index position of the target feature
+pred_target_index <- grep(target_name, 
+                     colnames(test_pca))
+cat("Target Feature Index =", pred_target_index)
+
+# Create Predicted Target Feature (y-test) 
+y_test <- test_pca[pred_target_index]
+```
+
+```{r}
+# Predictions using the Cross-Validation model
+y_pred = predict(model_cv, newdata = test_pca[, -pred_target_index])
+
+```
+
+```{r}
+# Prediction Results from y_predictions
+round(y_pred, digits = 0)
+
+```
+
+```{r}
+# Transform y_test from data frame to numeric
+y_test_numeric <- as.numeric(unlist(y_test))
+
+# Original data
+y_test_numeric
+
+```
+
+## Prediction Metrics
+
+```{r}
+# Calculate Mean Absolute Error (MAE)
+mae_value <- mae(y_pred, y_test_numeric)
+cat("MAE =", mae_value, "\n")
+
+# Calculate MSE
+mse_predict <- mean((y_pred - y_test_numeric)^2)
+cat("MSE =", mse_predict, "\n")
+
+# Calculate RMSE
+rmse_predict <- sqrt(mean((y_pred - y_test_numeric)^2))
+cat("RMSE =", rmse_predict, "\n")
+
+# Calculate R-squared (R^2)
+predicted_r2 <- 1 - sum((y_test_numeric - y_pred)^2) / 
+  sum((y_test_numeric - mean(y_test_numeric))^2)
+cat("Predicted R^2 =", predicted_r2)
+
+```
+
+# 08 - Training Conclusion
+
+In conclusion, this project has demonstrated the effectiveness of Principal Component Analysis (PCA) in dimension reduction with the following key points:
+
+-   PCA was able to reduce from 37 features down to just 2 principal components.
+
+-   The best score of R\^2 = 97.61% was from the Linear Regression with Cross-validation model.
+
+-   The predicted R\^2 = 96%
+
+-   The average deviation between the predicted values, and observed values for 'Expected Survival' is RMSE = 33.77.
+
+-   The model has not been exposed to unseen data with a large amount of observations to asses its robustness, and reliability.

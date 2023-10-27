@@ -31,9 +31,10 @@ execute:
 # install.packages("psych")
 # install.packages("rcompanion")
 # install.packages("robustbase")
+# install.packages("rrcov")
 ```
 
-```{r, warnings = FALSE, message = FALSE}
+```{r, warning = FALSE, message = FALSE}
 # Load libraries
 library(tidyverse)    
 library(caTools)
@@ -53,6 +54,7 @@ library(ggplot2)      # graphics
 library(car)          # for outliers test, power transformation
 library(MASS)         # power transformation, robust model
 library(DescTools)    # robust scaler
+library(rrcov)
 # library(EnvStats) # for rosnerTest
 # library(corrr)      # correlation matrix
 # library(FactoMineR) # PCA analysis
@@ -125,7 +127,7 @@ train_data <- rename(train_data,
 
 ```{r}
 plot_intro(train_data)
-plot_missing(train_data)
+plot_missing(train_data, missing_only = TRUE)
 ```
 
 ## Data Distribution
@@ -237,7 +239,7 @@ qqnorm(transformed_data$expected_survival,
        ylab="Sample Quantiles (QQ) for Expected Survival")
 qqline(transformed_data$expected_survival, col="magenta")
 
-# transformed N scores
+# transformed Normal scores
 boxplot(transformed_data$expected_survival)
 ```
 
@@ -251,50 +253,28 @@ boxplot(transformed_data)
 ```
 
 ```{r}
-kurtosis_df <- describe(transformed_data)
-# With negative responses, use the bcnPower family
-# Fit the initial linear regression model
-# Tansformation
+# kurtosis_df <- describe(transformed_data)
+
+# With negative responses, use the yjPower family
+
 train_data_subset <- (train_data[,c(1,7, 15, 16, 17, 20, 38)])
 boxplot(train_data_subset)
-train_data_log_subset <- (train_data_subset)^(1/2)
-boxplot(train_data_log_subset)
 plot_qq(train_data_subset)
 
-boxcox_model <- powerTransform(train_data_subset, c(-2, -1, 0, 1, 2))
+boxcox_model <- powerTransform(train_data_subset, family = "yjPower")
 # Summary of the Box-Cox transformation results
 summary(boxcox_model)
 
+# Second tranformation: Inverse
+boxplot(train_data_subset$`hypercalcemia_calcium > 10.2Mg`)
+train_data_subset$`hypercalcemia_calcium > 10.2Mg` <- 1/(train_data_subset$`hypercalcemia_calcium > 10.2Mg`)
+boxplot(train_data_subset$`hypercalcemia_calcium > 10.2Mg`)
+plot_qq(train_data_subset$`hypercalcemia_calcium > 10.2Mg`)
 
-# score_root_data <- abs(transformed_data[,c(1,7, 15, 16, 17, 20, 38)])
-# boxplot(score_root_data)
-# boxcox_model <- powerTransform(score_root_data, c(-2, -1, 0, 1, 2))
-# # Summary of the Box-Cox transformation results
-# summary(boxcox_model)
-# 
-# 
-# library(MASS)
-# b <- boxcox(abs(score_root_data), lambda = seq(-2:2)))
-# # Exact lambda
-# lambda <- b$x[which.max(b$y)]
-# lambda
-# 
-# 
-# 
-# model <- lm(expected_survival ~ ., data = transformed_data)
-# 
-# # Apply the Box-Cox transformation
-# boxcox_model <- powerTransform(model, family = "bcnPower")
-# 
-# # Summary of the Box-Cox transformation results
-# summary(boxcox_model)
-# 
-# # Test the transformed model with a specific lambda value (e.g., 0.5)
-# test_transformed_model <- testTransform(boxcox_model, lambda = 0.5)
-# 
-# # Summary of the transformed model
-# summary(test_transformed_model)
-
+boxplot(train_data_subset$`phosphorus < 3.5Mg`)
+plot_qq(train_data_subset$`phosphorus < 3.5Mg`)
+phosphorus_3.5 <- 1/(train_data_subset$`phosphorus < 3.5Mg`)^(1/4)
+boxplot(phosphorus_3.5)
 ```
 
 ## Feature Scaling
@@ -306,22 +286,22 @@ summary(boxcox_model)
 
 ```{r}
 # Apply Robust Scaler to the dataset
-robustSc_data <- scale(transformed_data)
+robust_scaled_data <- RobScale(transformed_data, center = TRUE, scale = TRUE)
 ```
 
 ```{r}
 # # Robust Scaling Numerical Features
 # robust_scaled_data <- scale(transformed_data, center = TRUE, scale = TRUE)
 # 
-# # Verify class type
-# class(robust_scaled_data)
-# 
-# # Transform matrix to data frame
-# robust_scaled_df <- as.data.frame(robust_scaled_data)
+# Verify class type
+class(robust_scaled_data)
+
+# Transform matrix to data frame
+robust_scaled_df <- as.data.frame(robust_scaled_data)
 ```
 
 ```{r}
-boxplot(robustSc_data)
+boxplot(robust_scaled_df)
 
 ```
 

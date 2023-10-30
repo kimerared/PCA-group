@@ -167,7 +167,7 @@ train_data$State <- NULL
 
 # Impute missing values with the mean
 for (col in colnames(train_data)) {
-  median_value <- median(train_data[[col]], na.rm = TRUE)
+  median_value <- mean(train_data[[col]], na.rm = TRUE)
   train_data[[col]] <- ifelse(is.na(train_data[[col]]), median_value,     train_data[[col]])
 }
 
@@ -401,7 +401,7 @@ summary(no_outliers_model)
 ols_plot_resid_lev(no_outliers_model)
 ```
 
-# 04 - PCA Analysis using 
+# 04 - PCA Analysis using
 
 # SVD - Singular Value Decomposition
 
@@ -600,6 +600,7 @@ get_target_index <- function(df, target_name){
   return(target_index)
 }
 
+target_index <- get_target_index(training_set, target_name)
 training_target_index <- get_target_index(training_set, target_name)
 test_target_index <- get_target_index(test_set, target_name)
 ```
@@ -654,39 +655,18 @@ test_set[, -target_index] <- predict(sc, test_set[, -target_index])
 ## Applying PCA to Training & Test sets
 
 ```{r}
-# # Apply PCA to the training set
-# pca_train <- prcomp(training_set_nscores, center = TRUE, 
-#                     scale. = TRUE, rank. = 8)
-# 
-# # Apply the same PCA transformation to the test set
-# pca_test <- predict(pca_train, newdata = test_set_nscores)
-# 
-# # Now, pca_train contains the PCA results for the training set, and pca_test contains the PCA results for the test set
-# pca_train <- as.data.frame(pca_train)
-# # pca_test <- as.data.frame(pca_test)
-# 
-# # Linear Model
-# 
-# # Perform linear regression
-# lm_model <- lm( ~ ., data = as.data.frame(pca_train$x))
-# 
-# # Summarize the regression model
-# summary(lm_model)
-
-
-
 # Perform Principal Component Analysis (PCA) preprocessing on the training data
-pca <- preProcess(training_set_nscores[, -training_target_index], 
+pca <- preProcess(training_set[, -training_target_index],
                   method = 'pca', pcaComp = 8)
 
 # Apply PCA transformation to original training set
-training_set_pca <- predict(pca, training_set_nscores)
+training_set_pca <- predict(pca, training_set)
 
 # Reorder columns, moving the dependent feature index to the end
 training_set_pca <- training_set_pca[c(2:9, 1)]
 
 # Apply PCA transformation to original test set
-test_set_pca <- predict(pca, test_set_nscores)
+test_set_pca <- predict(pca, test_set)
 
 # Reorder columns, moving the dependent feature index to the end
 test_set_pca <- test_set_pca[c(2:9, 1)]
@@ -694,7 +674,7 @@ test_set_pca <- test_set_pca[c(2:9, 1)]
 
 ```{r}
 # # Perform Principal Component Analysis (PCA) preprocessing on the training data
-# pca <- preProcess(training_set[, -target_index], 
+# pca <- preProcess(training_set[, -target_index],
 #                   method = 'pca', pcaComp = 8)
 # 
 # # Apply PCA transformation to original training set
@@ -767,7 +747,7 @@ ggcorrplot(corr_matrix)
 
 ```{r}
 # Create a subset with 2 principal components
-significant_pcs = c(1, 9)
+significant_pcs = c(1, 6, 9)
 train_pca <- training_set_pca[, significant_pcs]
 test_pca <- test_set_pca[, significant_pcs]
 ```
@@ -801,7 +781,7 @@ set.seed(my_seed)
 y = train_pca$expected_survival
 
 # fit PCR
-pcr_model <- pcr(y ~ PC1, data=train_pca, validation="CV")
+pcr_model <- pcr(y ~ PC1+PC6, data=train_pca, validation="CV")
 
 summary(pcr_model)
 

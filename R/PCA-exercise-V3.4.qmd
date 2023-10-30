@@ -164,22 +164,58 @@ train_data_sc <- scale(train_data[, -target_index])
 
 ```
 
-# 03 - PCA Analysis
+# 03 - PCA Requirements
 
 ## Outliers Detection
 
--   There are no outliers in the data frame.
+-   There are some outliers in the data frame.
+-   However, there are three outliers with no high leverage.
 
 ```{r}
 # Plot a boxplot to visualize potential outliers
 boxplot(train_data_sc, main = "Outliers Detection")
 ```
 
+## Leverage
+
+```{r}
+set.seed(my_seed)
+
+# Fit regression model
+ordinary_model <- lm(expected_survival ~ ., data = train_data)
+
+# Print the model summary
+summary(ordinary_model)
+
+# Residual Diagnostics
+ols_plot_resid_lev(ordinary_model)
+```
+
+## Removing Outliers
+
+After removing one outlier from the dataset, we discovered that the final results produced minimal variability. Therefore, we decided to present a model that captures all the data points' information; thus, no observations will be removed from the final model.
+
+```{r}
+# No Outliers subset
+no_outliers_df <- slice(train_data, -c(56))
+
+set.seed(my_seed)
+
+# Fit regression model
+no_outliers_model <- lm(expected_survival ~ ., data = no_outliers_df)
+
+# Print the model summary
+summary(no_outliers_model)
+
+# Residual Diagnostics
+ols_plot_resid_lev(no_outliers_model)
+```
+
 ## Correlations
 
 -   There are high correlated features.
 
--   Multicollinearity is present in the data set
+-   Multicollinearity is present in the data set.
 
 ```{r}
 # Calculate correlations and round to 2 digits
@@ -206,7 +242,21 @@ full_model <- lm(expected_survival ~ ., data = train_data)
 summary(full_model)
 ```
 
-# 04 - SVD - Singular Value Decomposition
+# 04 - PCA Analysis
+
+## SVD - Singular Value Decomposition
+
+We will focus on Singular Value Decomposition which is a classic approach for PCA analysis.
+
+Singular Value Decomposition is a factorization technique used in linear algebra to decompose a matrix into three matrices.
+
+1.  U: A matrix whose columns are the left singular vectors of the original matrix.
+
+2.  D: A diagonal matrix whose entries are the singular values of the original matrix.
+
+3.  V: A matrix whose columns are the right singular vectors of the original matrix.
+
+The SVD is closely related to the eigenvalue decomposition (EVD), which is another factorization technique used in linear algebra. While the EVD can only be applied to square matrices, the SVD can be applied to any matrix, including rectangular matrices. The SVD is also more numerically stable than the EVD, making it a preferred method for many applications.
 
 -   Note: The Spectral Decomposition approach is used with the princomp() function.
 

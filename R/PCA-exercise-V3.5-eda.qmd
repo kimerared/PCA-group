@@ -125,7 +125,7 @@ train_data <- rename(train_data,
 
 ```{r}
 plot_intro(train_data)
-plot_missing(train_data)
+plot_missing(train_data,  missing_only = T)
 ```
 
 ## Data Distribution

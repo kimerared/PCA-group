@@ -32,6 +32,7 @@ execute:
 # install.packages("rcompanion")
 # install.packages("robustbase")
 # install.packages("rrcov")
+# install.packages("olsrr")
 ```
 
 ```{r, warning = FALSE, message = FALSE}
@@ -50,11 +51,12 @@ library(psych)        # descriptive stats - skew, kurtosis
 library(rcompanion)   # histogram plot
 library(DataExplorer) # EDA
 library(ggplot2)      # graphics
-#library(robustbase)   # robust scaler
+library(robustbase)   # robust scaler
 library(car)          # for outliers test, power transformation
 library(MASS)         # power transformation, robust model
 library(DescTools)    # robust scaler
 library(rrcov)
+library(olsrr)        # outliers, leverage plot
 # library(EnvStats) # for rosnerTest
 # library(corrr)      # correlation matrix
 # library(FactoMineR) # PCA analysis
@@ -210,12 +212,27 @@ plot_boxplot(train_data[, 18:30], by = "expected_survival",
              ncol = 4L, geom_boxplot_args = list(outlier.color = "magenta"))
 ```
 
+## Leverage
+
+```{r}
+set.seed(my_seed)
+
+# Fit regression model
+ordinary_model <- lm(expected_survival ~ ., data = train_data)
+
+# Print the model summary
+summary(ordinary_model)
+
+# Residual Diagnostics
+ols_plot_resid_lev(ordinary_model)
+```
+
 ## Data Transformation
 
 Kurtosis was used to mitigate the outliers. Kurtosis is a statistical measure used to describe the shape of a distribution. Moreover, kurtosis measures the tail distribution, and it describes how heavily differ from a normal distribution. Excess kurtosis is a metric that compares the kurtosis of a distribution against the kurtosis of a normal distribution. The kurtosis of a normal distribution equals 3.
 
 ```{r}
-# Apply the N-scores transformation to train_data
+# Apply the Normal-scores transformation to train_data
 transformed_data <- train_data
 
 # Specify the columns you want to transform (e.g., columns 18 to 25)
@@ -249,6 +266,7 @@ plot_qq(transformed_data[, 19:30], ncol = 4L)
 
 ```{r}
 boxplot(transformed_data)
+describe(transformed_data)
 
 ```
 
@@ -257,9 +275,11 @@ boxplot(transformed_data)
 
 # With negative responses, use the yjPower family
 
-train_data_subset <- (train_data[,c(1,7, 15, 16, 17, 20, 38)])
+train_data_subset <- (transformed_data[,c(1,7, 15, 16, 17, 20, 38)])
 boxplot(train_data_subset)
 plot_qq(train_data_subset)
+plotNormalHistogram(train_data_subset$tr_better_transfusion)
+kurtosis_df <- describe(train_data_subset)
 
 boxcox_model <- powerTransform(train_data_subset, family = "yjPower")
 # Summary of the Box-Cox transformation results
@@ -267,14 +287,32 @@ summary(boxcox_model)
 
 # Second tranformation: Inverse
 boxplot(train_data_subset$`hypercalcemia_calcium > 10.2Mg`)
-train_data_subset$`hypercalcemia_calcium > 10.2Mg` <- 1/(train_data_subset$`hypercalcemia_calcium > 10.2Mg`)
+train_data_subset$`tran_hypercalcemia_calcium > 10.2Mg` <- (1/(train_data_subset$`hypercalcemia_calcium > 10.2Mg`))+32
 boxplot(train_data_subset$`hypercalcemia_calcium > 10.2Mg`)
 plot_qq(train_data_subset$`hypercalcemia_calcium > 10.2Mg`)
+plotNormalHistogram(train_data_subset$`hypercalcemia_calcium > 10.2Mg`)
+describe(train_data_subset$`tran_hypercalcemia_calcium > 10.2Mg`)
 
-boxplot(train_data_subset$`phosphorus < 3.5Mg`)
-plot_qq(train_data_subset$`phosphorus < 3.5Mg`)
-phosphorus_3.5 <- 1/(train_data_subset$`phosphorus < 3.5Mg`)^(1/4)
-boxplot(phosphorus_3.5)
+boxplot(train_data_subset$better_transfusion)
+plot_qq(train_data_subset$better_transfusion)
+powerTransform(train_data_subset$better_transfusion)
+train_data_subset$tr_better_transfusion <- log(train_data_subset$better_transfusion, base = exp(3))
+boxplot(train_data_subset$tr_better_transfusion)
+plotNormalHistogram(train_data_subset$tr_better_transfusion)
+
+boxplot(train_data_subset$Kt_v_1.2)
+plot_qq(train_data_subset$Kt_v_1.2)
+plot_density(train_data_subset$Kt_v_1.2)
+plotNormalHistogram(train_data_subset$Kt_v_1.2)
+powerTransform(train_data_subset$Kt_v_1.2)
+train_data_subset$Kt_v_1.2_power <- (train_data_subset$Kt_v_1.2)
+boxplot(train_data_subset$Kt_v_1.2_power)
+
+boxplot(train_data_subset$long_term_catheter)
+plot_qq(train_data_subset$long_term_catheter)
+powerTransform(train_data_subset$long_term_catheter)
+train_data_subset$long_term_catheter <- (train_data_subset$long_term_catheter)^(1/3)
+boxplot(train_data_subset$long_term_catheter)
 ```
 
 ## Feature Scaling
@@ -286,23 +324,18 @@ boxplot(phosphorus_3.5)
 
 ```{r}
 # Apply Robust Scaler to the dataset
-robust_scaled_data <- RobScale(transformed_data, center = TRUE, scale = TRUE)
+# robust_scaled_data <- RobScale(transformed_data, center = TRUE, scale = TRUE)
 ```
 
 ```{r}
-# # Robust Scaling Numerical Features
-# robust_scaled_data <- scale(transformed_data, center = TRUE, scale = TRUE)
+# Scaling Numerical Features
+scaled_data <- scale(transformed_data, center = TRUE, scale = TRUE)
 # 
 # Verify class type
-class(robust_scaled_data)
+class(scaled_data)
 
 # Transform matrix to data frame
-robust_scaled_df <- as.data.frame(robust_scaled_data)
-```
-
-```{r}
-boxplot(robust_scaled_df)
-
+scaled_df <- as.data.frame(scaled_data)
 ```
 
 ## Correlations
@@ -317,7 +350,7 @@ boxplot(robust_scaled_df)
 
 ```{r}
 # Calculate correlations and round to 2 digits
-corr_matrix <- cor(robust_scaled_df, method = "spearman")
+corr_matrix <- cor(transformed_data)
 corr_matrix <- round(corr_matrix, digits = 2)
 
 # Print names of highly correlated features; threshold > 0.30
@@ -370,36 +403,75 @@ correlation_table
 
 -   The Adjusted R\^2 = 99.99% is an indication of over-fitting, or bias.
 
-## Target Feature
+## Ordinary Model
 
 ```{r}
 # Find the index position of the target feature 
 target_name <- "expected_survival"
 target_index <- grep(target_name, 
-                     colnames(robust_scaled_df))
+                     colnames(transformed_data))
 ```
 
 ```{r}
 set.seed(my_seed)
-# robust_full_model <- lmrob(expected_survival ~ ., data = robust_scaled_df, setting = "KS2014") 
-# summary(robust_full_model)
 
-# Fit a robust regression model
-robust_model <- rlm(expected_survival ~ ., data = robust_scaled_df)
+# Fit regression model
+ordinary_model <- lm(expected_survival ~ ., data = transformed_data)
 
 # Print the model summary
-summary(robust_model)
+summary(ordinary_model)
 
+# Residual Diagnostics
+ols_plot_resid_lev(ordinary_model)
+
+# install.packages("sjPlot")
+library(sjPlot)
+plot_model(ordinary_model, type = "pred", show.data = T)
 ```
+
+```{r}
+# No Outliers subset
+no_outliers_df <- slice(transformed_data, -c(36))
+
+set.seed(my_seed)
+
+# Fit regression model
+no_outliers_model <- lm(expected_survival ~ ., data = no_outliers_df)
+
+# Print the model summary
+summary(no_outliers_model)
+
+# Residual Diagnostics
+ols_plot_resid_lev(no_outliers_model)
+```
+
+## Robust Model
 
 ```{r}
 set.seed(my_seed)
 
-# Fit a multiple linear regression model
-full_model <- lm(expected_survival ~ ., data = robust_scaled_df)
+#kruskal
+# install.packages("ggstatsplot")
+library(ggstatsplot)
+
+ggbetwee
+#Replace NaN & Inf with NA
+df[is.na(df) | df=="Inf"] = NA
+robust_df <- slice(robust_scaled_df, (, -c(36)))
+# Fit a Robust linear regression model
+robust_full_model <- lmrob(expected_survival ~ ., 
+                           data = train_data,
+                           setting = "KS2014")
 
 # Print a summary of the regression model
-summary(full_model)
+summary(robust_full_model)
+
+# after robust scale
+
+robust_full_model <- lm(expected_survival ~ ., data = robust_scaled_df)
+
+# Print a summary of the regression model
+summary(robust_full_model)
 ```
 
 # 04 - SVD - Singular Value Decomposition
@@ -407,9 +479,40 @@ summary(full_model)
 -   Note: The Spectral Decomposition approach is used with the princomp() function.
 
 ```{r}
-# Apply PCA using prcomp()
+# Robust PCA
+robust_pca_data <- PcaHubert(transformed_data, k=0, 
+                             kmax=10, skew=TRUE, alpha=0.75,
+                             scale = TRUE)
+
+robust_pca_data
+
+## If you want to print the scores too, use
+    print(robust_pca_data, print.x=TRUE)
+
+## Using the formula interface
+    # PcaHubert(~., data=hbk)
+
+## To plot the results:
+
+    plot(robust_pca_data)                    # distance plot
+    pca2 <- PcaHubert(transformed_data, k=2)  
+    plot(pca2)                   # PCA diagnostic plot (or outlier map)
+    
+## Use the standard plots available for prcomp and princomp
+    screeplot(robust_pca_data)    
+    biplot(robust_pca_data)    
+    
+## Restore the covraiance matrix     
+    py <- PcaHubert(scaled_trans_data)
+    cov.1 <- py@loadings %*% diag(py@eigenvalues) %*% t(py@loadings)
+    cov.1  
+```
+
+```{r}
+# Apply classic PCA using prcomp()
 data_pca <- prcomp(scaled_trans_data, center = TRUE, scale. = TRUE)
 summary(data_pca)
+
 ```
 
 ## PCA - Elements
